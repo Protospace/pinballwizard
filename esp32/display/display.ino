@@ -24,14 +24,17 @@ void setup()
 	lcd.backlight();
 
 	lcd.setCursor(0,0);
-	lcd.print("Hello, world!");
-
-	lcd.setCursor(0,1);
 	lcd.write(0);
-	lcd.setCursor(1,1);
+	lcd.setCursor(1,0);
 	lcd.print("12.34");
 }
 
+int count = 0;
+
 void loop()
 {
+	lcd.setCursor(0,1);
+	lcd.print(count);
+	count++;
+	delay(100);
 }

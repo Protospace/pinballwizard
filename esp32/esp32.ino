@@ -29,9 +29,6 @@ void processControllerState() {
 
 	static StaticJsonDocument<1024> jsonDoc;
 
-	static float balance;
-	static String first_name;
-
 	switch (controllerState) {
 		case BEGIN:
 			break;
