@@ -10,41 +10,74 @@
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 #include <WebServer.h>
-#include <LiquidCrystal_I2C.h>
-#include <ArduinoJson.h>  // version 6.19.4
-#include <ElegantOTA.h>   // version 2.2.9
-#include <WebSerial.h>    // version 1.3.0
+#include <LiquidCrystal_I2C.h>  // "LiquidCrystal I2C" by Marco Schwartz v1.1.2
+#include <ArduinoJson.h>        // v6.19.4
+#include <ElegantOTA.h>         // v2.2.9
+//#include <WebSerial.h>          // v1.3.0
 
 #include "secrets.h"
 //#include "lets_encrypt_ca.h"
 
+#define GAME_DATA_DELAY_MS 500
+
+String scannedCard = "";
+
+#define GAME_STATE_UNKNOWN   -1
+#define GAME_STATE_IN_GAME   0
+#define GAME_STATE_IDLE      1
+#define GAME_STATE_SETTINGS  2
+static const char* gameStateLabels[] = {"IN GAME", "IDLE", "SETTINGS"};
+int gameState = GAME_STATE_UNKNOWN;
+
+#define PLAYER_UNKNOWN   -1
+#define PLAYER1           0
+#define PLAYER2           1
+#define PLAYER3           2
+#define PLAYER4           3
+static const char* playerNumberLabels[] = {"PLAYER1", "PLAYER2", "PLAYER3", "PLAYER4"};
+int playerNumber = PLAYER_UNKNOWN;
+
 WiFiClientSecure wc;
 WebServer server(80);
 
-void recvMsg(uint8_t *data, size_t len){
-	WebSerial.println("Received Data...");
-	String d = "";
-	for(int i=0; i < len; i++){
-		d += char(data[i]);
-	}
-	WebSerial.println(d);
-}
+//void recvMsg(uint8_t *data, size_t len){
+//	WebSerial.println("Received Data...");
+//	String d = "";
+//	for(int i=0; i < len; i++){
+//		d += char(data[i]);
+//	}
+//	WebSerial.println(d);
+//}
 
 void (* rebootArduino) (void) = 0;
 
 LiquidCrystal_I2C lcd(0x27, 16, 2);
 
 enum controllerStates {
-	BEGIN,
-	WIFI_CONNECT,
-	GET_TIME,
-	HEARTBEAT,
-	FREEZE,
+	CONTROLLER_BEGIN,
+	CONTROLLER_WIFI_CONNECT,
+	CONTROLLER_GET_TIME,
+	CONTROLLER_HEARTBEAT,
+	CONTROLLER_FREEZE,
 };
 
-enum controllerStates controllerState = BEGIN;
+enum controllerStates controllerState = CONTROLLER_BEGIN;
 
-String scannedCard = "";
+enum dataStates {
+	DATA_START,
+	DATA_GAME_STATE,
+	DATA_ACTIVE_PLAYER,
+	DATA_PLAYER1_SCORE,
+	DATA_PLAYER2_SCORE,
+	DATA_PLAYER3_SCORE,
+	DATA_PLAYER4_SCORE,
+	DATA_FINISH,
+	DATA_PAUSE,
+	DATA_WAIT,
+};
+
+enum dataStates dataState = DATA_START;
+
 
 void processControllerState() {
 	static unsigned long timer = millis();
@@ -58,12 +91,12 @@ void processControllerState() {
 	HTTPClient https;
 
 	switch (controllerState) {
-		case BEGIN:
+		case CONTROLLER_BEGIN:
 			Serial.println("[WIFI] Connecting...");
-			controllerState = WIFI_CONNECT;
+			controllerState = CONTROLLER_WIFI_CONNECT;
 			break;
 
-		case WIFI_CONNECT:
+		case CONTROLLER_WIFI_CONNECT:
 			lcd.setCursor(0,0);
 			lcd.print("CONNECTING");
 			for (i = 0; i < (millis() / 1000) % 4; i++) {
@@ -77,12 +110,12 @@ void processControllerState() {
 
 				Serial.println("[TIME] Setting time using NTP.");
 				configTime(8 * 3600, 0, "pool.ntp.org", "time.nist.gov");
-				controllerState = GET_TIME;
+				controllerState = CONTROLLER_GET_TIME;
 			}
 
 			break;
 
-		case GET_TIME:
+		case CONTROLLER_GET_TIME:
 			// time is needed to check cert
 
 			lcd.setCursor(0,0);
@@ -99,12 +132,12 @@ void processControllerState() {
 				Serial.print(asctime(&timeinfo));
 
 				Serial.println("[WIFI] Test connection to portal...");
-				controllerState = HEARTBEAT;
+				controllerState = CONTROLLER_HEARTBEAT;
 			}
 
 			break;
 
-		case HEARTBEAT:
+		case CONTROLLER_HEARTBEAT:
 			// test connection to the portal
 
 			lcd.setCursor(0,0);
@@ -114,7 +147,7 @@ void processControllerState() {
 
 			if (!result) {
 				Serial.println("[WIFI] https.begin failed.");
-				controllerState = BEGIN;
+				controllerState = CONTROLLER_BEGIN;
 			}
 
 			result = https.GET();
@@ -123,22 +156,99 @@ void processControllerState() {
 
 			if (result != HTTP_CODE_OK) {
 				Serial.printf("[WIFI] Portal GET failed, error:\n%s\n", https.errorToString(result).c_str());
-				controllerState = BEGIN;
+				controllerState = CONTROLLER_BEGIN;
 			}
 
 			Serial.println("[WIFI] Heartbeat success.");
 			lcd.setCursor(0,1);
 			lcd.print("GOOD");
 
-			controllerState = FREEZE;
+			controllerState = CONTROLLER_FREEZE;
 
 			break;
 
-		case FREEZE:
+		case CONTROLLER_FREEZE:
 			break;
 	}
 
 	return;
+}
+
+void processDataState() {
+	static enum dataStates nextDataState;
+	static unsigned long timer;
+
+	switch (dataState) {
+		case DATA_START:
+			dataState = DATA_GAME_STATE;
+			break;
+
+		case DATA_GAME_STATE:
+			Serial.println("dump 169 1");
+			nextDataState = DATA_ACTIVE_PLAYER;
+			dataState = DATA_PAUSE;
+			break;
+
+		case DATA_ACTIVE_PLAYER:
+			Serial.println("dump 173 1");
+			nextDataState = DATA_PLAYER1_SCORE;
+			dataState = DATA_PAUSE;
+			break;
+
+		case DATA_PLAYER1_SCORE:
+			Serial.println("dump 256 4");
+			nextDataState = DATA_PLAYER2_SCORE;
+			dataState = DATA_PAUSE;
+			break;
+
+		case DATA_PLAYER2_SCORE:
+			Serial.println("dump 260 4");
+			nextDataState = DATA_PLAYER3_SCORE;
+			dataState = DATA_PAUSE;
+			break;
+
+		case DATA_PLAYER3_SCORE:
+			Serial.println("dump 264 4");
+			nextDataState = DATA_PLAYER4_SCORE;
+			dataState = DATA_PAUSE;
+			break;
+
+		case DATA_PLAYER4_SCORE:
+			Serial.println("dump 268 4");
+			nextDataState = DATA_FINISH;
+			dataState = DATA_PAUSE;
+			break;
+
+		case DATA_FINISH:
+			dataState = DATA_GAME_STATE;
+			break;
+
+
+		case DATA_PAUSE:
+			timer = millis();
+			dataState = DATA_WAIT;
+			break;
+
+		case DATA_WAIT:
+			if (millis() - timer > GAME_DATA_DELAY_MS) {
+				dataState = nextDataState;
+			}
+			break;
+	}
+}
+
+void parseGameData(String data) {
+	if (data.startsWith("0x00A9:")) {  // game state
+		gameState = data.substring(10, 11).toInt();
+
+		Serial.print("Set gamestate: ");
+		Serial.println(gameStateLabels[gameState]);
+	} else if (data.startsWith("0x00AD:")) {  // player number
+		playerNumber = data.substring(10, 11).toInt();
+
+		Serial.print("Set player number: ");
+		Serial.println(playerNumberLabels[playerNumber]);
+	}
 }
 
 void setup()
@@ -164,12 +274,12 @@ void setup()
 	wc.setInsecure();  // disables all SSL checks. don't use in production
 
 	server.on("/", []() {
-		server.send(200, "text/plain", "Hi! I am ESP32.");
-	});
+			server.send(200, "text/plain", "Hi! I am ESP32.");
+			});
 
 	ElegantOTA.begin(&server);
-	WebSerial.begin(&server);
-	WebSerial.msgCallback(recvMsg);
+	//WebSerial.begin(&server);
+	//WebSerial.msgCallback(recvMsg);
 	server.begin();
 
 	delay(500);
@@ -196,18 +306,19 @@ void loop()
 		//}
 	}
 
-    if (Serial.available() > 0)
-    {
+	if (Serial.available() > 0)
+	{
 		String data = Serial.readString();
 		data.trim();
 		Serial.print("Serial: ");
 		Serial.println(data);
 
-		if (data == "ok") {
-			Serial.println("Typed ok");
+		if (data.length() > 8) {
+			parseGameData(data);
 		}
-    }
+	}
 
 	processControllerState();
+	processDataState();
 	server.handleClient();
 }
