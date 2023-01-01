@@ -1,14 +1,19 @@
+// Protospace Pinball Wizard
+// Sends high scores to the portal
+//
+// Board: ESP32 Wrover Module
+
 #include <Arduino.h>
 #include <HardwareSerial.h>
 #include <Wire.h>
-#include <ArduinoJson.h>
-#include <LiquidCrystal_I2C.h>
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 #include <WebServer.h>
-#include <ElegantOTA.h>
-#include <WebSerial.h>
+#include <LiquidCrystal_I2C.h>
+#include <ArduinoJson.h>  // version 6.19.4
+#include <ElegantOTA.h>   // version 2.2.9
+#include <WebSerial.h>    // version 1.3.0
 
 #include "secrets.h"
 //#include "lets_encrypt_ca.h"
