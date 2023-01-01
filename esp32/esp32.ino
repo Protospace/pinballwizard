@@ -8,12 +8,22 @@
 #include <HTTPClient.h>
 #include <WebServer.h>
 #include <ElegantOTA.h>
+#include <WebSerial.h>
 
 #include "secrets.h"
 //#include "lets_encrypt_ca.h"
 
 WiFiClientSecure wc;
 WebServer server(80);
+
+void recvMsg(uint8_t *data, size_t len){
+	WebSerial.println("Received Data...");
+	String d = "";
+	for(int i=0; i < len; i++){
+		d += char(data[i]);
+	}
+	WebSerial.println(d);
+}
 
 void (* rebootArduino) (void) = 0;
 
@@ -149,10 +159,12 @@ void setup()
 	wc.setInsecure();  // disables all SSL checks. don't use in production
 
 	server.on("/", []() {
-		server.send(200, "text/plain", "Hi! I am ESP8266.");
+		server.send(200, "text/plain", "Hi! I am ESP32.");
 	});
 
 	ElegantOTA.begin(&server);
+	WebSerial.begin(&server);
+	WebSerial.msgCallback(recvMsg);
 	server.begin();
 
 	delay(500);
