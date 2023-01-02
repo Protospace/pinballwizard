@@ -37,8 +37,12 @@ int gameState = GAME_STATE_UNKNOWN;
 #define PLAYER2           1
 #define PLAYER3           2
 #define PLAYER4           3
-static const char* playerNumberLabels[] = {"PLAYER1", "PLAYER2", "PLAYER3", "PLAYER4"};
+static const char* playerNumberLabels[] = {"PLAYER 1", "PLAYER 2", "PLAYER 3", "PLAYER 4"};
 int playerNumber = PLAYER_UNKNOWN;
+
+int playerScores[4];
+String playerCards[4];
+String playerNames[4];
 
 WiFiClientSecure wc;
 WebServer server(80);
@@ -61,7 +65,9 @@ enum controllerStates {
 	CONTROLLER_WIFI_CONNECT,
 	CONTROLLER_GET_TIME,
 	CONTROLLER_HEARTBEAT,
-	CONTROLLER_FREEZE,
+	CONTROLLER_RESET,
+	CONTROLLER_IDLE,
+	CONTROLLER_IN_GAME,
 };
 
 enum controllerStates controllerState = CONTROLLER_BEGIN;
@@ -166,11 +172,63 @@ void processControllerState() {
 			lcd.setCursor(0,1);
 			lcd.print("GOOD");
 
-			controllerState = CONTROLLER_FREEZE;
+			controllerState = CONTROLLER_RESET;
 
 			break;
 
-		case CONTROLLER_FREEZE:
+		case CONTROLLER_RESET:
+			gameState = GAME_STATE_UNKNOWN;
+			playerNumber = PLAYER_UNKNOWN;
+
+			playerScores[0] = 0;
+			playerScores[1] = 0;
+			playerScores[2] = 0;
+			playerScores[3] = 0;
+
+			playerCards[0] = "";
+			playerCards[1] = "";
+			playerCards[2] = "";
+			playerCards[3] = "";
+
+			playerNames[0] = "";
+			playerNames[1] = "";
+			playerNames[2] = "";
+			playerNames[3] = "";
+
+			Serial.println("[GAME] Cleared game data.");
+
+			lcd.clear();
+			lcd.print("WAITING FOR    ");
+			lcd.setCursor(0,1);
+			lcd.print("GAME");
+
+			controllerState = CONTROLLER_IDLE;
+			break;
+
+		case CONTROLLER_IDLE:
+			if (gameState == GAME_STATE_IN_GAME) {
+				Serial.println("[GAME] Moving to in-game state...");
+				controllerState = CONTROLLER_IN_GAME;
+			}
+
+			break;
+
+		case CONTROLLER_IN_GAME:
+			if (playerNumber >= 0) {
+				lcd.setCursor(0,0);
+
+				if (playerNames[playerNumber].length() > 0) {
+					lcd.print(playerNames[playerNumber]);
+				} else {
+					lcd.print(playerNumberLabels[playerNumber]);
+					lcd.print(" SCAN NOW");
+				}
+
+				lcd.setCursor(0,1);
+				lcd.print("SCORE: ");
+				lcd.print(playerScores[playerNumber]);
+			}
+
 			break;
 	}
 
@@ -277,11 +335,11 @@ void setup()
 	lcd.init();
 	lcd.backlight();
 
-	lcd.setCursor(0,0);
+	lcd.clear();
 	lcd.print("BOOT UP");
 
 	WiFi.mode(WIFI_STA);
-	WiFi.begin("Protospace", "yycmakers");
+	WiFi.begin(WIFI_SSID, WIFI_PASS);
 
 	//X509List cert(lets_encrypt_ca);
 	//wc.setTrustAnchors(&cert);
