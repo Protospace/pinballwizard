@@ -18,12 +18,16 @@
 #include "secrets.h"
 //#include "lets_encrypt_ca.h"
 
-#define GAME_DATA_DELAY_MS 500
+//String portalAPI = "https://api.my.protospace.ca";
+String portalAPI = "https://api.spaceport.dns.t0.vc";
 
 #define RX1_PIN 32
 #define TX1_PIN 33
+HardwareSerial *gameSerial = &Serial;   	// for development
+//HardwareSerial *gameSerial = &Serial1;  	// for ATmega
 
-String scannedCard = "";
+#define GAME_DATA_DELAY_MS 500
+
 
 #define GAME_STATE_UNKNOWN   -1
 #define GAME_STATE_IN_GAME   0
@@ -37,10 +41,12 @@ int gameState = GAME_STATE_UNKNOWN;
 #define PLAYER2           1
 #define PLAYER3           2
 #define PLAYER4           3
-static const char* playerNumberLabels[] = {"PLAYER 1", "PLAYER 2", "PLAYER 3", "PLAYER 4"};
+static const char* playerNumberLabels[] = {"PLAYER1", "PLAYER2", "PLAYER3", "PLAYER4"};
+static const char* playerNumberLabelsShort[] = {"P1", "P2", "P3", "P4"};
 int playerNumber = PLAYER_UNKNOWN;
 
 int playerScores[4];
+String scannedCard = "";
 String playerCards[4];
 String playerNames[4];
 
@@ -68,6 +74,7 @@ enum controllerStates {
 	CONTROLLER_RESET,
 	CONTROLLER_IDLE,
 	CONTROLLER_IN_GAME,
+	CONTROLLER_GET_NAME,
 };
 
 enum controllerStates controllerState = CONTROLLER_BEGIN;
@@ -92,6 +99,7 @@ void processControllerState() {
 	static unsigned long timer = millis();
 	static int statusCode;
 	static StaticJsonDocument<1024> jsonDoc;
+	String response;
 
 	time_t now = time(nullptr);
 	struct tm timeinfo;
@@ -152,11 +160,12 @@ void processControllerState() {
 			lcd.setCursor(0,0);
 			lcd.print("CHECK PORTAL...");
 
-			result = https.begin(wc, "https://api.my.protospace.ca/stats/");
+			result = https.begin(wc, portalAPI + "/stats/");
 
 			if (!result) {
 				Serial.println("[WIFI] https.begin failed.");
 				controllerState = CONTROLLER_BEGIN;
+				break;
 			}
 
 			result = https.GET();
@@ -166,6 +175,7 @@ void processControllerState() {
 			if (result != HTTP_CODE_OK) {
 				Serial.printf("[WIFI] Portal GET failed, error:\n%s\n", https.errorToString(result).c_str());
 				controllerState = CONTROLLER_BEGIN;
+				break;
 			}
 
 			Serial.println("[WIFI] Heartbeat success.");
@@ -209,7 +219,10 @@ void processControllerState() {
 			if (gameState == GAME_STATE_IN_GAME) {
 				Serial.println("[GAME] Moving to in-game state...");
 				controllerState = CONTROLLER_IN_GAME;
+				break;
 			}
+
+			// TODO: add periodic heartbeat?
 
 			break;
 
@@ -217,8 +230,12 @@ void processControllerState() {
 			if (playerNumber >= 0) {
 				lcd.setCursor(0,0);
 
-				if (playerNames[playerNumber].length() > 0) {
+				bool nameIsSet = playerNames[playerNumber].length() > 0;
+				if (nameIsSet) {
+					lcd.print(playerNumberLabelsShort[playerNumber]);
+					lcd.print(" ");
 					lcd.print(playerNames[playerNumber]);
+					lcd.print("             ");
 				} else {
 					lcd.print(playerNumberLabels[playerNumber]);
 					lcd.print(" SCAN NOW");
@@ -228,6 +245,42 @@ void processControllerState() {
 				lcd.print("SCORE: ");
 				lcd.print(playerScores[playerNumber]);
 			}
+
+			break;
+
+		case CONTROLLER_GET_NAME:
+			lcd.setCursor(0,0);
+			lcd.print("CHECKING CARD       ");
+
+			result = https.begin(wc, portalAPI + "/pinball/" + scannedCard + "/get_name/");
+
+			if (!result) {
+				Serial.println("[CARD] https.begin failed.");
+				controllerState = CONTROLLER_BEGIN;
+				break;
+			}
+
+			result = https.GET();
+
+			Serial.printf("[CARD] Http code: %d\n", result);
+
+			if (result != HTTP_CODE_OK) {
+				Serial.printf("[CARD] Bad scan, error:\n%s\n", https.errorToString(result).c_str());
+				controllerState = CONTROLLER_IN_GAME;
+				break;
+			}
+
+			response = https.getString();
+
+			Serial.print("[CARD] Response: ");
+			Serial.println(response);
+
+			deserializeJson(jsonDoc, response);
+
+			playerNames[playerNumber] = jsonDoc["name"].as<String>();
+			playerCards[playerNumber] = scannedCard;
+
+			controllerState = CONTROLLER_IN_GAME;
 
 			break;
 	}
@@ -245,37 +298,37 @@ void processDataState() {
 			break;
 
 		case DATA_GAME_STATE:
-			Serial1.println("dump 169 1");
+			gameSerial->println("dump 169 1");
 			nextDataState = DATA_ACTIVE_PLAYER;
 			dataState = DATA_PAUSE;
 			break;
 
 		case DATA_ACTIVE_PLAYER:
-			Serial1.println("dump 173 1");
+			gameSerial->println("dump 173 1");
 			nextDataState = DATA_PLAYER1_SCORE;
 			dataState = DATA_PAUSE;
 			break;
 
 		case DATA_PLAYER1_SCORE:
-			Serial1.println("dump 256 4");
+			gameSerial->println("dump 256 4");
 			nextDataState = DATA_PLAYER2_SCORE;
 			dataState = DATA_PAUSE;
 			break;
 
 		case DATA_PLAYER2_SCORE:
-			Serial1.println("dump 260 4");
+			gameSerial->println("dump 260 4");
 			nextDataState = DATA_PLAYER3_SCORE;
 			dataState = DATA_PAUSE;
 			break;
 
 		case DATA_PLAYER3_SCORE:
-			Serial1.println("dump 264 4");
+			gameSerial->println("dump 264 4");
 			nextDataState = DATA_PLAYER4_SCORE;
 			dataState = DATA_PAUSE;
 			break;
 
 		case DATA_PLAYER4_SCORE:
-			Serial1.println("dump 268 4");
+			gameSerial->println("dump 268 4");
 			nextDataState = DATA_FINISH;
 			dataState = DATA_PAUSE;
 			break;
@@ -298,6 +351,19 @@ void processDataState() {
 	}
 }
 
+int parseScore(String data) {
+	// takes a BCD-encoded hex dump of the score data string:
+	// 0x0100: 0x00 0x12 0x34 0x56
+	// and returns int 123456
+
+	String scoreStr = data.substring(10, 12)
+		+ data.substring(15, 17)
+		+ data.substring(20, 22)
+		+ data.substring(25, 27);
+
+	return scoreStr.toInt();
+}
+
 void parseGameData(String data) {
 	if (data.startsWith("0x00A9:")) {  // game state
 		gameState = data.substring(11, 12).toInt();
@@ -317,15 +383,43 @@ void parseGameData(String data) {
 		} else {
 			Serial.println("UNKNOWN");
 		}
+	} else if (data.startsWith("0x0100:")) {  // player 1 score
+		int score = parseScore(data);
+		playerScores[PLAYER1] = score;
+
+		Serial.print("Set player 1 score: ");
+		Serial.println(score);
+	} else if (data.startsWith("0x0104:")) {  // player 2 score
+		int score = parseScore(data);
+		playerScores[PLAYER2] = score;
+
+		Serial.print("Set player 2 score: ");
+		Serial.println(score);
+	} else if (data.startsWith("0x0108:")) {  // player 3 score
+		int score = parseScore(data);
+		playerScores[PLAYER3] = score;
+
+		Serial.print("Set player 3 score: ");
+		Serial.println(score);
+	} else if (data.startsWith("0x010C:")) {  // player 4 score
+		int score = parseScore(data);
+		playerScores[PLAYER4] = score;
+
+		Serial.print("Set player 4 score: ");
+		Serial.println(score);
 	}
 }
 
 void setup()
 {
 	Serial.begin(115200);
+	Serial.setTimeout(50);
 
-	Serial1.begin(115200, SERIAL_8N1, RX1_PIN, TX1_PIN);
-	Serial1.setTimeout(50);
+	if (*gameSerial == Serial1) {
+		Serial.println("Game serial configured as Serial1 (ATmega).");
+		gameSerial->begin(115200, SERIAL_8N1, RX1_PIN, TX1_PIN);
+		gameSerial->setTimeout(50);
+	}
 
 	Serial2.begin(9600);
 	Serial2.setTimeout(50);
@@ -359,11 +453,11 @@ void setup()
 
 void loop()
 {
-	if (Serial1.available() > 0)
+	if (gameSerial->available() > 0)
 	{
-		String data = Serial1.readString();
+		String data = gameSerial->readString();
 		data.trim();
-		Serial.print("Serial1: ");
+		Serial.print("Game serial data: ");
 		Serial.println(data);
 
 		if (data.length() > 8) {
@@ -380,14 +474,19 @@ void loop()
 		Serial.print(", len: ");
 		Serial.println(data.length());
 
-		//if (controllerState == WAIT_FOR_SCAN && data[0] == 0x02 && data[13] == 0x03) {
-		//	scannedCard = data.substring(1, 11);
+		if (controllerState == CONTROLLER_IN_GAME && playerNumber >= 0) {
+			bool nameIsSet = playerNames[playerNumber].length() > 0;
 
-		//	Serial.print("Card: ");
-		//	Serial.println(scannedCard);
+			if (!nameIsSet) {
+				scannedCard = data.substring(1, 11);
 
-		//	//controllerState = GET_BALANCE;
-		//}
+				Serial.print("Card: ");
+				Serial.println(scannedCard);
+
+				controllerState = CONTROLLER_GET_NAME;
+			}
+		}
+
 	}
 
 	processControllerState();
