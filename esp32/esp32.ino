@@ -245,12 +245,20 @@ void parseGameData(String data) {
 		gameState = data.substring(11, 12).toInt();
 
 		Serial.print("Set gamestate: ");
-		Serial.println(gameStateLabels[gameState]);
+		if (gameState >= 0 && gameState < 3) {
+			Serial.println(gameStateLabels[gameState]);
+		} else {
+			Serial.println("UNKNOWN");
+		}
 	} else if (data.startsWith("0x00AD:")) {  // player number
 		playerNumber = data.substring(11, 12).toInt();
 
 		Serial.print("Set player number: ");
-		Serial.println(playerNumberLabels[playerNumber]);
+		if (playerNumber >= 0 && playerNumber < 4) {
+			Serial.println(playerNumberLabels[playerNumber]);
+		} else {
+			Serial.println("UNKNOWN");
+		}
 	}
 }
 
