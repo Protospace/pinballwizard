@@ -20,6 +20,9 @@
 
 #define GAME_DATA_DELAY_MS 500
 
+#define RX1_PIN 32
+#define TX1_PIN 33
+
 String scannedCard = "";
 
 #define GAME_STATE_UNKNOWN   -1
@@ -184,37 +187,37 @@ void processDataState() {
 			break;
 
 		case DATA_GAME_STATE:
-			Serial.println("dump 169 1");
+			Serial1.println("dump 169 1");
 			nextDataState = DATA_ACTIVE_PLAYER;
 			dataState = DATA_PAUSE;
 			break;
 
 		case DATA_ACTIVE_PLAYER:
-			Serial.println("dump 173 1");
+			Serial1.println("dump 173 1");
 			nextDataState = DATA_PLAYER1_SCORE;
 			dataState = DATA_PAUSE;
 			break;
 
 		case DATA_PLAYER1_SCORE:
-			Serial.println("dump 256 4");
+			Serial1.println("dump 256 4");
 			nextDataState = DATA_PLAYER2_SCORE;
 			dataState = DATA_PAUSE;
 			break;
 
 		case DATA_PLAYER2_SCORE:
-			Serial.println("dump 260 4");
+			Serial1.println("dump 260 4");
 			nextDataState = DATA_PLAYER3_SCORE;
 			dataState = DATA_PAUSE;
 			break;
 
 		case DATA_PLAYER3_SCORE:
-			Serial.println("dump 264 4");
+			Serial1.println("dump 264 4");
 			nextDataState = DATA_PLAYER4_SCORE;
 			dataState = DATA_PAUSE;
 			break;
 
 		case DATA_PLAYER4_SCORE:
-			Serial.println("dump 268 4");
+			Serial1.println("dump 268 4");
 			nextDataState = DATA_FINISH;
 			dataState = DATA_PAUSE;
 			break;
@@ -239,12 +242,12 @@ void processDataState() {
 
 void parseGameData(String data) {
 	if (data.startsWith("0x00A9:")) {  // game state
-		gameState = data.substring(10, 11).toInt();
+		gameState = data.substring(11, 12).toInt();
 
 		Serial.print("Set gamestate: ");
 		Serial.println(gameStateLabels[gameState]);
 	} else if (data.startsWith("0x00AD:")) {  // player number
-		playerNumber = data.substring(10, 11).toInt();
+		playerNumber = data.substring(11, 12).toInt();
 
 		Serial.print("Set player number: ");
 		Serial.println(playerNumberLabels[playerNumber]);
@@ -254,6 +257,9 @@ void parseGameData(String data) {
 void setup()
 {
 	Serial.begin(115200);
+
+	Serial1.begin(115200, SERIAL_8N1, RX1_PIN, TX1_PIN);
+	Serial1.setTimeout(50);
 
 	Serial2.begin(9600);
 	Serial2.setTimeout(50);
@@ -287,6 +293,18 @@ void setup()
 
 void loop()
 {
+	if (Serial1.available() > 0)
+	{
+		String data = Serial1.readString();
+		data.trim();
+		Serial.print("Serial1: ");
+		Serial.println(data);
+
+		if (data.length() > 8) {
+			parseGameData(data);
+		}
+	}
+
 	if (Serial2.available() > 0)
 	{
 		String data = Serial2.readString();
@@ -304,18 +322,6 @@ void loop()
 
 		//	//controllerState = GET_BALANCE;
 		//}
-	}
-
-	if (Serial.available() > 0)
-	{
-		String data = Serial.readString();
-		data.trim();
-		Serial.print("Serial: ");
-		Serial.println(data);
-
-		if (data.length() > 8) {
-			parseGameData(data);
-		}
 	}
 
 	processControllerState();
