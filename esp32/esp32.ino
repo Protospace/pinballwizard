@@ -75,6 +75,7 @@ enum controllerStates {
 	CONTROLLER_IDLE,
 	CONTROLLER_IN_GAME,
 	CONTROLLER_GET_NAME,
+	CONTROLLER_SEND_SCORES,
 };
 
 enum controllerStates controllerState = CONTROLLER_BEGIN;
@@ -100,6 +101,7 @@ void processControllerState() {
 	static int statusCode;
 	static StaticJsonDocument<1024> jsonDoc;
 	String response;
+	String postData;
 
 	time_t now = time(nullptr);
 	struct tm timeinfo;
@@ -227,6 +229,12 @@ void processControllerState() {
 			break;
 
 		case CONTROLLER_IN_GAME:
+			if (gameState == GAME_STATE_IDLE) {
+				Serial.println("[GAME] Game over, sending scores...");
+				controllerState = CONTROLLER_SEND_SCORES;
+				break;
+			}
+
 			if (playerNumber >= 0) {
 				lcd.setCursor(0,0);
 
@@ -249,7 +257,7 @@ void processControllerState() {
 			break;
 
 		case CONTROLLER_GET_NAME:
-			lcd.setCursor(0,0);
+			lcd.clear();
 			lcd.print("CHECKING CARD       ");
 
 			result = https.begin(wc, portalAPI + "/pinball/" + scannedCard + "/get_name/");
@@ -260,6 +268,7 @@ void processControllerState() {
 				break;
 			}
 
+			//https.addHeader("Authorization", PINBALL_API_TOKEN);
 			result = https.GET();
 
 			Serial.printf("[CARD] Http code: %d\n", result);
@@ -283,6 +292,60 @@ void processControllerState() {
 			controllerState = CONTROLLER_IN_GAME;
 
 			break;
+
+		case CONTROLLER_SEND_SCORES:
+			now = time(nullptr);
+
+			lcd.clear();
+			lcd.print("GAME OVER");
+			lcd.setCursor(0,1);
+
+			for (i = 0; i < 4; i++) {
+				bool playerUnclaimed = playerCards[i].length() == 0;
+				if (playerUnclaimed) {
+					continue;
+				}
+
+				lcd.print("SENDING ");
+				lcd.print(playerNumberLabelsShort[i]);
+				lcd.print(" SCORE");
+
+				result = https.begin(wc, portalAPI + "/pinball/score/");
+
+				if (!result) {
+					Serial.println("[SCORE] https.begin failed.");
+					controllerState = CONTROLLER_BEGIN;
+					break;
+				}
+
+				postData = "card_number="
+					+ playerCards[i]
+					+ "&game_id="
+					+ String(now)
+					+ "&player="
+					+ String(i+1)
+					+ "&score="
+					+ String(playerScores[i]);
+
+				Serial.println("[SCORE] POST data:");
+				Serial.println(postData);
+
+				https.addHeader("Content-Type", "application/x-www-form-urlencoded");
+				https.addHeader("Content-Length", String(postData.length()));
+				//https.addHeader("Authorization", PINBALL_API_TOKEN);
+				result = https.POST(postData);
+
+				Serial.printf("[SCORE] Http code: %d\n", result);
+
+				if (result != HTTP_CODE_OK) {
+					Serial.printf("[SCORE] Bad send, error:\n%s\n", https.errorToString(result).c_str());
+					controllerState = CONTROLLER_BEGIN;
+					break;
+				}
+
+			}
+
+			controllerState = CONTROLLER_RESET;
 	}
 
 	return;
