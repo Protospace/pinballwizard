@@ -28,6 +28,8 @@ HardwareSerial *gameSerial = &Serial;   	// for development
 
 #define GAME_DATA_DELAY_MS 500
 #define CONTROLLER_DELAY_MS 2000
+#define CONNECT_TIMEOUT_MS 10000
+#define HEARTBEAT_INTERVAL_MS 1000 * 60 * 60  // hourly
 
 
 #define GAME_STATE_UNKNOWN   -1
@@ -121,6 +123,8 @@ void processControllerState() {
 	switch (controllerState) {
 		case CONTROLLER_BEGIN:
 			Serial.println("[WIFI] Connecting...");
+
+			timer = millis();
 			controllerState = CONTROLLER_WIFI_CONNECT;
 			break;
 
@@ -139,6 +143,10 @@ void processControllerState() {
 				Serial.println("[TIME] Setting time using NTP.");
 				configTime(8 * 3600, 0, "pool.ntp.org", "time.nist.gov");
 				controllerState = CONTROLLER_GET_TIME;
+			}
+
+			if (millis() - timer > CONNECT_TIMEOUT_MS) {
+				rebootArduino();
 			}
 
 			break;
@@ -205,8 +213,6 @@ void processControllerState() {
 			break;
 
 		case CONTROLLER_RESET:
-			Serial.println("[GAME] Cleared game data.");
-
 			gameState = GAME_STATE_UNKNOWN;
 			playerNumber = PLAYER_UNKNOWN;
 			time(&now);
@@ -235,6 +241,7 @@ void processControllerState() {
 			lcd.setCursor(0,1);
 			lcd.print("GAME");
 
+			timer = millis();
 			controllerState = CONTROLLER_IDLE;
 			break;
 
@@ -249,7 +256,9 @@ void processControllerState() {
 				break;
 			}
 
-			// TODO: add periodic heartbeat?
+			if (millis() - timer > HEARTBEAT_INTERVAL_MS) {
+				controllerState = CONTROLLER_HEARTBEAT;
+			}
 
 			break;
 
