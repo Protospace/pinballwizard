@@ -21,10 +21,10 @@
 //String portalAPI = "https://api.my.protospace.ca";
 String portalAPI = "https://api.spaceport.dns.t0.vc";
 
-#define RX1_PIN 32
-#define TX1_PIN 33
-HardwareSerial *gameSerial = &Serial;   	// for development
-//HardwareSerial *gameSerial = &Serial1;  	// for ATmega
+#define RX1_PIN 9
+#define TX1_PIN 10
+//HardwareSerial *gameSerial = &Serial;   	// for development
+HardwareSerial *gameSerial = &Serial1;  	// for ATmega
 
 #define GAME_DATA_DELAY_MS 500
 #define CONTROLLER_DELAY_MS 2000
@@ -422,7 +422,7 @@ void processControllerState() {
 
 		case CONTROLLER_SUCCESS:
 			lcd.clear();
-			lcd.print("SUCCESS!");
+			lcd.print("SCORES SENT!");
 
 			nextControllerState = CONTROLLER_BEGIN;
 			controllerState = CONTROLLER_DELAY;
@@ -572,7 +572,7 @@ void setup()
 
 	if (*gameSerial == Serial1) {
 		Serial.println("Game serial configured as Serial1 (ATmega).");
-		gameSerial->begin(115200, SERIAL_8N1, RX1_PIN, TX1_PIN);
+		gameSerial->begin(115200, SERIAL_8N1);   //, RX1_PIN, TX1_PIN);
 		gameSerial->setTimeout(50);
 	}
 
