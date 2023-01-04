@@ -27,6 +27,7 @@ HardwareSerial *gameSerial = &Serial;   	// for development
 //HardwareSerial *gameSerial = &Serial1;  	// for ATmega
 
 #define GAME_DATA_DELAY_MS 500
+#define CONTROLLER_DELAY_MS 2000
 
 
 #define GAME_STATE_UNKNOWN   -1
@@ -76,6 +77,10 @@ enum controllerStates {
 	CONTROLLER_IN_GAME,
 	CONTROLLER_GET_NAME,
 	CONTROLLER_SEND_SCORES,
+	CONTROLLER_SEND_RETRY,
+	CONTROLLER_SUCCESS,
+	CONTROLLER_DELAY,
+	CONTROLLER_WAIT,
 };
 
 enum controllerStates controllerState = CONTROLLER_BEGIN;
@@ -89,7 +94,7 @@ enum dataStates {
 	DATA_PLAYER3_SCORE,
 	DATA_PLAYER4_SCORE,
 	DATA_FINISH,
-	DATA_PAUSE,
+	DATA_DELAY,
 	DATA_WAIT,
 };
 
@@ -98,12 +103,16 @@ enum dataStates dataState = DATA_START;
 
 void processControllerState() {
 	static unsigned long timer = millis();
+	static enum controllerStates nextControllerState;
 	static int statusCode;
 	static StaticJsonDocument<1024> jsonDoc;
+	static int retryCount;
+	static String gameId;
+
 	String response;
 	String postData;
-
-	time_t now = time(nullptr);
+	bool failed;
+	time_t now;
 	struct tm timeinfo;
 	int i;
 	int result;
@@ -144,7 +153,7 @@ void processControllerState() {
 			}
 			lcd.print("   ");
 
-			now = time(nullptr);
+			time(&now);
 			if (now > 8 * 3600 * 2) {
 				gmtime_r(&now, &timeinfo);
 				Serial.print("[TIME] Current time in UTC: ");
@@ -159,14 +168,17 @@ void processControllerState() {
 		case CONTROLLER_HEARTBEAT:
 			// test connection to the portal
 
-			lcd.setCursor(0,0);
+			lcd.clear();
 			lcd.print("CHECK PORTAL...");
 
 			result = https.begin(wc, portalAPI + "/stats/");
 
 			if (!result) {
 				Serial.println("[WIFI] https.begin failed.");
-				controllerState = CONTROLLER_BEGIN;
+				lcd.clear();
+				lcd.print("CONNECTION ERROR");
+				nextControllerState = CONTROLLER_BEGIN;
+				controllerState = CONTROLLER_DELAY;
 				break;
 			}
 
@@ -176,7 +188,11 @@ void processControllerState() {
 
 			if (result != HTTP_CODE_OK) {
 				Serial.printf("[WIFI] Portal GET failed, error:\n%s\n", https.errorToString(result).c_str());
-				controllerState = CONTROLLER_BEGIN;
+				lcd.clear();
+				lcd.print("BAD REQUEST: ");
+				lcd.print(result);
+				nextControllerState = CONTROLLER_BEGIN;
+				controllerState = CONTROLLER_DELAY;
 				break;
 			}
 
@@ -189,8 +205,13 @@ void processControllerState() {
 			break;
 
 		case CONTROLLER_RESET:
+			Serial.println("[GAME] Cleared game data.");
+
 			gameState = GAME_STATE_UNKNOWN;
 			playerNumber = PLAYER_UNKNOWN;
+			time(&now);
+			gameId = String(now);
+			retryCount = 0;
 
 			playerScores[0] = 0;
 			playerScores[1] = 0;
@@ -219,7 +240,11 @@ void processControllerState() {
 
 		case CONTROLLER_IDLE:
 			if (gameState == GAME_STATE_IN_GAME) {
-				Serial.println("[GAME] Moving to in-game state...");
+				time(&now);
+				gameId = String(now);
+				Serial.print("[GAME] Starting new game with ID: ");
+				Serial.println(gameId);
+
 				controllerState = CONTROLLER_IN_GAME;
 				break;
 			}
@@ -231,6 +256,8 @@ void processControllerState() {
 		case CONTROLLER_IN_GAME:
 			if (gameState == GAME_STATE_IDLE) {
 				Serial.println("[GAME] Game over, sending scores...");
+				lcd.clear();
+				lcd.print("GAME OVER");
 				controllerState = CONTROLLER_SEND_SCORES;
 				break;
 			}
@@ -252,6 +279,7 @@ void processControllerState() {
 				lcd.setCursor(0,1);
 				lcd.print("SCORE: ");
 				lcd.print(playerScores[playerNumber]);
+				lcd.print("                 ");
 			}
 
 			break;
@@ -264,7 +292,10 @@ void processControllerState() {
 
 			if (!result) {
 				Serial.println("[CARD] https.begin failed.");
-				controllerState = CONTROLLER_BEGIN;
+				lcd.clear();
+				lcd.print("CONNECTION ERROR");
+				nextControllerState = CONTROLLER_BEGIN;
+				controllerState = CONTROLLER_DELAY;
 				break;
 			}
 
@@ -275,7 +306,11 @@ void processControllerState() {
 
 			if (result != HTTP_CODE_OK) {
 				Serial.printf("[CARD] Bad scan, error:\n%s\n", https.errorToString(result).c_str());
-				controllerState = CONTROLLER_IN_GAME;
+				lcd.clear();
+				lcd.print("BAD SCAN: ");
+				lcd.print(result);
+				nextControllerState = CONTROLLER_IN_GAME;
+				controllerState = CONTROLLER_DELAY;
 				break;
 			}
 
@@ -294,34 +329,29 @@ void processControllerState() {
 			break;
 
 		case CONTROLLER_SEND_SCORES:
-			now = time(nullptr);
-
-			lcd.clear();
-			lcd.print("GAME OVER");
-			lcd.setCursor(0,1);
-
+			failed = false;
 			for (i = 0; i < 4; i++) {
 				bool playerUnclaimed = playerCards[i].length() == 0;
 				if (playerUnclaimed) {
 					continue;
 				}
 
-				lcd.print("SENDING ");
-				lcd.print(playerNumberLabelsShort[i]);
-				lcd.print(" SCORE");
-
 				result = https.begin(wc, portalAPI + "/pinball/score/");
 
 				if (!result) {
 					Serial.println("[SCORE] https.begin failed.");
-					controllerState = CONTROLLER_BEGIN;
+					lcd.clear();
+					lcd.print("CONNECTION ERROR");
+					nextControllerState = CONTROLLER_SEND_RETRY;
+					controllerState = CONTROLLER_DELAY;
+					failed = true;
 					break;
 				}
 
 				postData = "card_number="
 					+ playerCards[i]
 					+ "&game_id="
-					+ String(now)
+					+ gameId
 					+ "&player="
 					+ String(i+1)
 					+ "&score="
@@ -339,13 +369,66 @@ void processControllerState() {
 
 				if (result != HTTP_CODE_OK) {
 					Serial.printf("[SCORE] Bad send, error:\n%s\n", https.errorToString(result).c_str());
-					controllerState = CONTROLLER_BEGIN;
+					lcd.clear();
+					lcd.print("BAD SEND: ");
+					lcd.print(result);
+					nextControllerState = CONTROLLER_SEND_RETRY;
+					controllerState = CONTROLLER_DELAY;
+					failed = true;
 					break;
 				}
 
 			}
 
-			controllerState = CONTROLLER_RESET;
+			if (!failed) {
+				controllerState = CONTROLLER_SUCCESS;
+			}
+
+			break;
+
+		case CONTROLLER_SEND_RETRY:
+			if (retryCount >= 5) {
+				lcd.clear();
+				lcd.print("SEND FAILED");
+				lcd.setCursor(0,1);
+				lcd.print("RESETTING...");
+				nextControllerState = CONTROLLER_BEGIN;
+				controllerState = CONTROLLER_DELAY;
+				break;
+			}
+
+			retryCount++;
+
+			lcd.clear();
+			lcd.print("RETRYING ");
+			lcd.print(retryCount);
+			lcd.print(" / 5");
+
+			Serial.print("[GAME] Retrying ");
+			Serial.print(retryCount);
+			Serial.println(" / 5...");
+
+			controllerState = CONTROLLER_SEND_SCORES;
+			break;
+
+		case CONTROLLER_SUCCESS:
+			lcd.clear();
+			lcd.print("SUCCESS!");
+
+			nextControllerState = CONTROLLER_BEGIN;
+			controllerState = CONTROLLER_DELAY;
+			break;
+
+		case CONTROLLER_DELAY:
+			timer = millis();
+			controllerState = CONTROLLER_WAIT;
+			break;
+
+		case CONTROLLER_WAIT:
+			if (millis() - timer > CONTROLLER_DELAY_MS) {
+				controllerState = nextControllerState;
+			}
+			break;
 	}
 
 	return;
@@ -363,37 +446,37 @@ void processDataState() {
 		case DATA_GAME_STATE:
 			gameSerial->println("dump 169 1");
 			nextDataState = DATA_ACTIVE_PLAYER;
-			dataState = DATA_PAUSE;
+			dataState = DATA_DELAY;
 			break;
 
 		case DATA_ACTIVE_PLAYER:
 			gameSerial->println("dump 173 1");
 			nextDataState = DATA_PLAYER1_SCORE;
-			dataState = DATA_PAUSE;
+			dataState = DATA_DELAY;
 			break;
 
 		case DATA_PLAYER1_SCORE:
 			gameSerial->println("dump 256 4");
 			nextDataState = DATA_PLAYER2_SCORE;
-			dataState = DATA_PAUSE;
+			dataState = DATA_DELAY;
 			break;
 
 		case DATA_PLAYER2_SCORE:
 			gameSerial->println("dump 260 4");
 			nextDataState = DATA_PLAYER3_SCORE;
-			dataState = DATA_PAUSE;
+			dataState = DATA_DELAY;
 			break;
 
 		case DATA_PLAYER3_SCORE:
 			gameSerial->println("dump 264 4");
 			nextDataState = DATA_PLAYER4_SCORE;
-			dataState = DATA_PAUSE;
+			dataState = DATA_DELAY;
 			break;
 
 		case DATA_PLAYER4_SCORE:
 			gameSerial->println("dump 268 4");
 			nextDataState = DATA_FINISH;
-			dataState = DATA_PAUSE;
+			dataState = DATA_DELAY;
 			break;
 
 		case DATA_FINISH:
@@ -401,7 +484,7 @@ void processDataState() {
 			break;
 
 
-		case DATA_PAUSE:
+		case DATA_DELAY:
 			timer = millis();
 			dataState = DATA_WAIT;
 			break;
@@ -446,25 +529,25 @@ void parseGameData(String data) {
 		} else {
 			Serial.println("UNKNOWN");
 		}
-	} else if (data.startsWith("0x0100:")) {  // player 1 score
+	} else if (gameState == GAME_STATE_IN_GAME && data.startsWith("0x0100:")) {  // player 1 score
 		int score = parseScore(data);
 		playerScores[PLAYER1] = score;
 
 		Serial.print("Set player 1 score: ");
 		Serial.println(score);
-	} else if (data.startsWith("0x0104:")) {  // player 2 score
+	} else if (gameState == GAME_STATE_IN_GAME && data.startsWith("0x0104:")) {  // player 2 score
 		int score = parseScore(data);
 		playerScores[PLAYER2] = score;
 
 		Serial.print("Set player 2 score: ");
 		Serial.println(score);
-	} else if (data.startsWith("0x0108:")) {  // player 3 score
+	} else if (gameState == GAME_STATE_IN_GAME && data.startsWith("0x0108:")) {  // player 3 score
 		int score = parseScore(data);
 		playerScores[PLAYER3] = score;
 
 		Serial.print("Set player 3 score: ");
 		Serial.println(score);
-	} else if (data.startsWith("0x010C:")) {  // player 4 score
+	} else if (gameState == GAME_STATE_IN_GAME && data.startsWith("0x010C:")) {  // player 4 score
 		int score = parseScore(data);
 		playerScores[PLAYER4] = score;
 
