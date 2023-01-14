@@ -28,7 +28,7 @@ HardwareSerial *gameSerial = &Serial1;  	// for ATmega
 
 #define GAME_DATA_DELAY_MS 500
 #define CONTROLLER_DELAY_MS 2000
-#define CONNECT_TIMEOUT_MS 10000
+#define CONNECT_TIMEOUT_MS 30000
 #define HEARTBEAT_INTERVAL_MS 1000 * 60 * 60  // hourly
 
 
@@ -140,9 +140,13 @@ void processControllerState() {
 				Serial.print("[WIFI] Connected. IP address: ");
 				Serial.println(WiFi.localIP());
 
+				lcd.setCursor(0,1);
+				lcd.print(WiFi.localIP());
+
 				Serial.println("[TIME] Setting time using NTP.");
 				configTime(8 * 3600, 0, "pool.ntp.org", "time.nist.gov");
-				controllerState = CONTROLLER_GET_TIME;
+				nextControllerState = CONTROLLER_GET_TIME;
+				controllerState = CONTROLLER_DELAY;
 			}
 
 			if (millis() - timer > CONNECT_TIMEOUT_MS) {
@@ -453,36 +457,42 @@ void processDataState() {
 			break;
 
 		case DATA_GAME_STATE:
+			Serial.println("Getting game state...");
 			gameSerial->println("dump 169 1");
 			nextDataState = DATA_ACTIVE_PLAYER;
 			dataState = DATA_DELAY;
 			break;
 
 		case DATA_ACTIVE_PLAYER:
+			Serial.println("Getting player number...");
 			gameSerial->println("dump 173 1");
 			nextDataState = DATA_PLAYER1_SCORE;
 			dataState = DATA_DELAY;
 			break;
 
 		case DATA_PLAYER1_SCORE:
+			Serial.println("Getting player 1 score...");
 			gameSerial->println("dump 256 4");
 			nextDataState = DATA_PLAYER2_SCORE;
 			dataState = DATA_DELAY;
 			break;
 
 		case DATA_PLAYER2_SCORE:
+			Serial.println("Getting player 2 score...");
 			gameSerial->println("dump 260 4");
 			nextDataState = DATA_PLAYER3_SCORE;
 			dataState = DATA_DELAY;
 			break;
 
 		case DATA_PLAYER3_SCORE:
+			Serial.println("Getting player 3 score...");
 			gameSerial->println("dump 264 4");
 			nextDataState = DATA_PLAYER4_SCORE;
 			dataState = DATA_DELAY;
 			break;
 
 		case DATA_PLAYER4_SCORE:
+			Serial.println("Getting player 4 score...");
 			gameSerial->println("dump 268 4");
 			nextDataState = DATA_FINISH;
 			dataState = DATA_DELAY;
@@ -520,24 +530,30 @@ int parseScore(String data) {
 }
 
 void parseGameData(String data) {
+	int num;
+
 	if (data.startsWith("0x00A9:")) {  // game state
-		gameState = data.substring(11, 12).toInt();
+		num = data.substring(11, 12).toInt();
+
+		if (num < 0 || num > 2) {
+			return;
+		}
+
+		gameState = num;
 
 		Serial.print("Set gamestate: ");
-		if (gameState >= 0 && gameState < 3) {
-			Serial.println(gameStateLabels[gameState]);
-		} else {
-			Serial.println("UNKNOWN");
-		}
+		Serial.println(gameStateLabels[gameState]);
 	} else if (data.startsWith("0x00AD:")) {  // player number
-		playerNumber = data.substring(11, 12).toInt();
+		num = data.substring(11, 12).toInt();
+
+		if (num < 0 || num > 3) {
+			return;
+		}
+
+		playerNumber = num;
 
 		Serial.print("Set player number: ");
-		if (playerNumber >= 0 && playerNumber < 4) {
-			Serial.println(playerNumberLabels[playerNumber]);
-		} else {
-			Serial.println("UNKNOWN");
-		}
+		Serial.println(playerNumberLabels[playerNumber]);
 	} else if (gameState == GAME_STATE_IN_GAME && data.startsWith("0x0100:")) {  // player 1 score
 		int score = parseScore(data);
 		playerScores[PLAYER1] = score;
@@ -581,6 +597,9 @@ void setup()
 
 	Serial.println("Host boot up");
 
+	Serial.println("Waiting 1 second...");
+	delay(1000);
+
 	lcd.init();
 	lcd.backlight();
 
@@ -603,11 +622,20 @@ void setup()
 	//WebSerial.msgCallback(recvMsg);
 	server.begin();
 
+	Serial.println("Setup complete.");
 	delay(500);
 }
 
 void loop()
 {
+	if (Serial.available() > 0)
+	{
+		String data = Serial.readString();
+		data.trim();
+
+		gameSerial->println(data);
+	}
+
 	if (gameSerial->available() > 0)
 	{
 		String data = gameSerial->readString();
@@ -628,6 +656,10 @@ void loop()
 		Serial.print(data);
 		Serial.print(", len: ");
 		Serial.println(data.length());
+
+		if (data.substring(1, 11) == "0700B5612A") {
+			rebootArduino();
+		}
 
 		if (controllerState == CONTROLLER_IN_GAME && playerNumber >= 0) {
 			bool nameIsSet = playerNames[playerNumber].length() > 0;
