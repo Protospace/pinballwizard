@@ -65,9 +65,15 @@ WebServer server(80);
 //	WebSerial.println(d);
 //}
 
-void (* rebootArduino) (void) = 0;
-
 LiquidCrystal_I2C lcd(0x27, 16, 2);
+
+void rebootArduino() {
+	WiFi.disconnect();
+	lcd.clear();
+	lcd.print("REBOOTING...");
+	delay(1000);
+	ESP.restart();
+}
 
 enum controllerStates {
 	CONTROLLER_BEGIN,
@@ -123,6 +129,10 @@ void processControllerState() {
 	switch (controllerState) {
 		case CONTROLLER_BEGIN:
 			Serial.println("[WIFI] Connecting...");
+
+			WiFi.disconnect();
+			WiFi.mode(WIFI_STA);
+			WiFi.begin(WIFI_SSID, WIFI_PASS);
 
 			timer = millis();
 			controllerState = CONTROLLER_WIFI_CONNECT;
@@ -307,7 +317,7 @@ void processControllerState() {
 				Serial.println("[CARD] https.begin failed.");
 				lcd.clear();
 				lcd.print("CONNECTION ERROR");
-				nextControllerState = CONTROLLER_BEGIN;
+				nextControllerState = CONTROLLER_HEARTBEAT;
 				controllerState = CONTROLLER_DELAY;
 				break;
 			}
@@ -405,7 +415,7 @@ void processControllerState() {
 				lcd.print("SEND FAILED");
 				lcd.setCursor(0,1);
 				lcd.print("RESETTING...");
-				nextControllerState = CONTROLLER_BEGIN;
+				nextControllerState = CONTROLLER_HEARTBEAT;
 				controllerState = CONTROLLER_DELAY;
 				break;
 			}
@@ -428,7 +438,7 @@ void processControllerState() {
 			lcd.clear();
 			lcd.print("SCORES SENT!");
 
-			nextControllerState = CONTROLLER_BEGIN;
+			nextControllerState = CONTROLLER_HEARTBEAT;
 			controllerState = CONTROLLER_DELAY;
 			break;
 
@@ -605,9 +615,6 @@ void setup()
 
 	lcd.clear();
 	lcd.print("BOOT UP");
-
-	WiFi.mode(WIFI_STA);
-	WiFi.begin(WIFI_SSID, WIFI_PASS);
 
 	//X509List cert(lets_encrypt_ca);
 	//wc.setTrustAnchors(&cert);
