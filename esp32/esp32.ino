@@ -28,6 +28,7 @@ HardwareSerial *gameSerial = &Serial1;  	// for ATmega
 
 #define GAME_DATA_DELAY_MS 500
 #define CONTROLLER_DELAY_MS 2000
+#define BONUS_WAIT_TIME 5000
 #define CONNECT_TIMEOUT_MS 30000
 #define ELLIPSIS_ANIMATION_DELAY_MS 1000
 #define HEARTBEAT_INTERVAL_MS 1000 * 60 * 60  // hourly
@@ -85,6 +86,7 @@ enum controllerStates {
 	CONTROLLER_IDLE,
 	CONTROLLER_IN_GAME,
 	CONTROLLER_GET_NAME,
+	CONTROLLER_WAIT_FOR_BONUS,
 	CONTROLLER_SEND_SCORES,
 	CONTROLLER_SEND_RETRY,
 	CONTROLLER_SUCCESS,
@@ -285,7 +287,8 @@ void processControllerState() {
 				Serial.println("[GAME] Game over, sending scores...");
 				lcd.clear();
 				lcd.print("GAME OVER");
-				controllerState = CONTROLLER_SEND_SCORES;
+				timer = millis();
+				controllerState = CONTROLLER_WAIT_FOR_BONUS;
 				break;
 			}
 
@@ -352,6 +355,13 @@ void processControllerState() {
 			playerCards[playerNumber] = scannedCard;
 
 			controllerState = CONTROLLER_IN_GAME;
+			break;
+
+		case CONTROLLER_WAIT_FOR_BONUS:
+			if (millis() - timer > BONUS_WAIT_TIME) {  // overflow safe
+				controllerState = CONTROLLER_SEND_SCORES;
+			}
+
 			break;
 
 		case CONTROLLER_SEND_SCORES:
