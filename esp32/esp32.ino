@@ -29,8 +29,10 @@ HardwareSerial *gameSerial = &Serial1;  	// for ATmega
 #define GAME_DATA_DELAY_MS 500
 #define CONTROLLER_DELAY_MS 2000
 #define CONNECT_TIMEOUT_MS 30000
+#define ELLIPSIS_ANIMATION_DELAY_MS 1000
 #define HEARTBEAT_INTERVAL_MS 1000 * 60 * 60  // hourly
 
+#define NUM_MAX_PLAYERS      4
 
 #define GAME_STATE_UNKNOWN   -1
 #define GAME_STATE_IN_GAME   0
@@ -48,10 +50,10 @@ static const char* playerNumberLabels[] = {"PLAYER1", "PLAYER2", "PLAYER3", "PLA
 static const char* playerNumberLabelsShort[] = {"P1", "P2", "P3", "P4"};
 int playerNumber = PLAYER_UNKNOWN;
 
-int playerScores[4];
+int playerScores[NUM_MAX_PLAYERS];
 String scannedCard = "";
-String playerCards[4];
-String playerNames[4];
+String playerCards[NUM_MAX_PLAYERS];
+String playerNames[NUM_MAX_PLAYERS];
 
 WiFiClientSecure wc;
 WebServer server(80);
@@ -68,7 +70,6 @@ WebServer server(80);
 LiquidCrystal_I2C lcd(0x27, 16, 2);
 
 void rebootArduino() {
-	WiFi.disconnect();
 	lcd.clear();
 	lcd.print("REBOOTING...");
 	delay(1000);
@@ -90,7 +91,6 @@ enum controllerStates {
 	CONTROLLER_DELAY,
 	CONTROLLER_WAIT,
 };
-
 enum controllerStates controllerState = CONTROLLER_BEGIN;
 
 enum dataStates {
@@ -105,7 +105,6 @@ enum dataStates {
 	DATA_DELAY,
 	DATA_WAIT,
 };
-
 enum dataStates dataState = DATA_START;
 
 
@@ -130,10 +129,6 @@ void processControllerState() {
 		case CONTROLLER_BEGIN:
 			Serial.println("[WIFI] Connecting...");
 
-			WiFi.disconnect();
-			WiFi.mode(WIFI_STA);
-			WiFi.begin(WIFI_SSID, WIFI_PASS);
-
 			timer = millis();
 			controllerState = CONTROLLER_WIFI_CONNECT;
 			break;
@@ -141,7 +136,7 @@ void processControllerState() {
 		case CONTROLLER_WIFI_CONNECT:
 			lcd.setCursor(0,0);
 			lcd.print("CONNECTING");
-			for (i = 0; i < (millis() / 1000) % 4; i++) {
+			for (i = 0; i < (millis() / ELLIPSIS_ANIMATION_DELAY_MS) % 4; i++) {
 				lcd.print(".");
 			}
 			lcd.print("   ");
@@ -159,18 +154,27 @@ void processControllerState() {
 				controllerState = CONTROLLER_DELAY;
 			}
 
-			if (millis() - timer > CONNECT_TIMEOUT_MS) {
+			if (millis() - timer > CONNECT_TIMEOUT_MS) {  // overflow safe
+				WiFi.disconnect();
+				WiFi.mode(WIFI_OFF);
+
+				lcd.clear();
+				lcd.print("CONNECT FAILED");
+				lcd.setCursor(0,1);
+				lcd.print("WAIT 5 MINS...");
+				delay(300 * 1000);
+
 				rebootArduino();
 			}
 
 			break;
 
 		case CONTROLLER_GET_TIME:
-			// time is needed to check cert
+			// time is needed to generate game ID
 
 			lcd.setCursor(0,0);
 			lcd.print("GETTING TIME");
-			for (i = 0; i < (millis() / 1000) % 4; i++) {
+			for (i = 0; i < (millis() / ELLIPSIS_ANIMATION_DELAY_MS) % 4; i++) {
 				lcd.print(".");
 			}
 			lcd.print("   ");
@@ -270,7 +274,7 @@ void processControllerState() {
 				break;
 			}
 
-			if (millis() - timer > HEARTBEAT_INTERVAL_MS) {
+			if (millis() - timer > HEARTBEAT_INTERVAL_MS) {  // overflow safe
 				controllerState = CONTROLLER_HEARTBEAT;
 			}
 
@@ -348,12 +352,11 @@ void processControllerState() {
 			playerCards[playerNumber] = scannedCard;
 
 			controllerState = CONTROLLER_IN_GAME;
-
 			break;
 
 		case CONTROLLER_SEND_SCORES:
 			failed = false;
-			for (i = 0; i < 4; i++) {
+			for (i = 0; i < NUM_MAX_PLAYERS; i++) {
 				bool playerUnclaimed = playerCards[i].length() == 0;
 				if (playerUnclaimed) {
 					continue;
@@ -448,7 +451,7 @@ void processControllerState() {
 			break;
 
 		case CONTROLLER_WAIT:
-			if (millis() - timer > CONTROLLER_DELAY_MS) {
+			if (millis() - timer > CONTROLLER_DELAY_MS) {  // overflow safe
 				controllerState = nextControllerState;
 			}
 			break;
@@ -519,7 +522,7 @@ void processDataState() {
 			break;
 
 		case DATA_WAIT:
-			if (millis() - timer > GAME_DATA_DELAY_MS) {
+			if (millis() - timer > GAME_DATA_DELAY_MS) {  // overflow safe
 				dataState = nextDataState;
 			}
 			break;
@@ -606,9 +609,9 @@ void setup()
 	Serial2.setTimeout(50);
 
 	Serial.println("Host boot up");
+	Serial.println("Waiting 2 seconds...");
 
-	Serial.println("Waiting 1 second...");
-	delay(1000);
+	delay(2000);
 
 	lcd.init();
 	lcd.backlight();
@@ -616,12 +619,15 @@ void setup()
 	lcd.clear();
 	lcd.print("BOOT UP");
 
+	WiFi.mode(WIFI_STA);
+	WiFi.begin(WIFI_SSID, WIFI_PASS);
+
 	//X509List cert(lets_encrypt_ca);
 	//wc.setTrustAnchors(&cert);
 	wc.setInsecure();  // disables all SSL checks. don't use in production
 
 	server.on("/", []() {
-			server.send(200, "text/plain", "Hi! I am ESP32.");
+			server.send(200, "text/plain", "<i>SEE YOU PINBALL WIZARD...</i>");
 			});
 
 	ElegantOTA.begin(&server);
