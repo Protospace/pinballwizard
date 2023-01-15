@@ -26,7 +26,7 @@ String portalAPI = "https://api.spaceport.dns.t0.vc";
 //HardwareSerial *gameSerial = &Serial;   	// for development
 HardwareSerial *gameSerial = &Serial1;  	// for ATmega
 
-#define GAME_DATA_DELAY_MS 500
+#define GAME_DATA_DELAY_MS 250
 #define CONTROLLER_DELAY_MS 2000
 #define BONUS_WAIT_TIME 5000
 #define CONNECT_TIMEOUT_MS 30000
@@ -97,10 +97,8 @@ enum controllerStates controllerState = CONTROLLER_BEGIN;
 
 enum dataStates {
 	DATA_START,
-	DATA_GAME_STATE,
-	DATA_ACTIVE_PLAYER,
+	DATA_GAME_INFO,
 	DATA_PLAYER_SCORES,
-	DATA_FINISH,
 	DATA_DELAY,
 	DATA_WAIT,
 };
@@ -473,19 +471,12 @@ void processDataState() {
 
 	switch (dataState) {
 		case DATA_START:
-			dataState = DATA_GAME_STATE;
+			dataState = DATA_GAME_INFO;
 			break;
 
-		case DATA_GAME_STATE:
-			Serial.println("Getting game state...");
-			gameSerial->println("dump 169 1");
-			nextDataState = DATA_ACTIVE_PLAYER;
-			dataState = DATA_DELAY;
-			break;
-
-		case DATA_ACTIVE_PLAYER:
-			Serial.println("Getting player number...");
-			gameSerial->println("dump 173 1");
+		case DATA_GAME_INFO:
+			Serial.println("Getting game state and player number...");
+			gameSerial->println("dump 160 16");
 			nextDataState = DATA_PLAYER_SCORES;
 			dataState = DATA_DELAY;
 			break;
@@ -493,12 +484,8 @@ void processDataState() {
 		case DATA_PLAYER_SCORES:
 			Serial.println("Getting player scores...");
 			gameSerial->println("dump 256 16");
-			nextDataState = DATA_FINISH;
+			nextDataState = DATA_GAME_INFO;
 			dataState = DATA_DELAY;
-			break;
-
-		case DATA_FINISH:
-			dataState = DATA_GAME_STATE;
 			break;
 
 
@@ -517,32 +504,25 @@ void processDataState() {
 
 void parseGameData(String data) {
 	int num;
+	String scoreStr;
 
-	if (data.startsWith("0x00A9:")) {  // game state
-		num = data.substring(11, 12).toInt();
+	if (data.startsWith("0x00A0:")) {  // game info
+		num = data.substring(56, 57).toInt();
 
-		if (num < 0 || num > 2) {
-			return;
+		if (num >= 0 && num <= 2) {
+			gameState = num;
+			Serial.print("Set gamestate: ");
+			Serial.println(gameStateLabels[gameState]);
 		}
 
-		gameState = num;
+		num = data.substring(76, 77).toInt();
 
-		Serial.print("Set gamestate: ");
-		Serial.println(gameStateLabels[gameState]);
-	} else if (data.startsWith("0x00AD:")) {  // player number
-		num = data.substring(11, 12).toInt();
-
-		if (num < 0 || num > 3) {
-			return;
+		if (num >= 0 && num <= 3) {
+			playerNumber = num;
+			Serial.print("Set player number: ");
+			Serial.println(playerNumberLabels[playerNumber]);
 		}
-
-		playerNumber = num;
-
-		Serial.print("Set player number: ");
-		Serial.println(playerNumberLabels[playerNumber]);
 	} else if (gameState == GAME_STATE_IN_GAME && data.startsWith("0x0100:")) {  // player scores
-		String scoreStr;
-
 		scoreStr = data.substring(10, 12)
 			+ data.substring(15, 17)
 			+ data.substring(20, 22)
