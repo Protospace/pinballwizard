@@ -99,10 +99,7 @@ enum dataStates {
 	DATA_START,
 	DATA_GAME_STATE,
 	DATA_ACTIVE_PLAYER,
-	DATA_PLAYER1_SCORE,
-	DATA_PLAYER2_SCORE,
-	DATA_PLAYER3_SCORE,
-	DATA_PLAYER4_SCORE,
+	DATA_PLAYER_SCORES,
 	DATA_FINISH,
 	DATA_DELAY,
 	DATA_WAIT,
@@ -489,34 +486,13 @@ void processDataState() {
 		case DATA_ACTIVE_PLAYER:
 			Serial.println("Getting player number...");
 			gameSerial->println("dump 173 1");
-			nextDataState = DATA_PLAYER1_SCORE;
+			nextDataState = DATA_PLAYER_SCORES;
 			dataState = DATA_DELAY;
 			break;
 
-		case DATA_PLAYER1_SCORE:
-			Serial.println("Getting player 1 score...");
-			gameSerial->println("dump 256 4");
-			nextDataState = DATA_PLAYER2_SCORE;
-			dataState = DATA_DELAY;
-			break;
-
-		case DATA_PLAYER2_SCORE:
-			Serial.println("Getting player 2 score...");
-			gameSerial->println("dump 260 4");
-			nextDataState = DATA_PLAYER3_SCORE;
-			dataState = DATA_DELAY;
-			break;
-
-		case DATA_PLAYER3_SCORE:
-			Serial.println("Getting player 3 score...");
-			gameSerial->println("dump 264 4");
-			nextDataState = DATA_PLAYER4_SCORE;
-			dataState = DATA_DELAY;
-			break;
-
-		case DATA_PLAYER4_SCORE:
-			Serial.println("Getting player 4 score...");
-			gameSerial->println("dump 268 4");
+		case DATA_PLAYER_SCORES:
+			Serial.println("Getting player scores...");
+			gameSerial->println("dump 256 16");
 			nextDataState = DATA_FINISH;
 			dataState = DATA_DELAY;
 			break;
@@ -537,19 +513,6 @@ void processDataState() {
 			}
 			break;
 	}
-}
-
-int parseScore(String data) {
-	// takes a BCD-encoded hex dump of the score data string:
-	// 0x0100: 0x00 0x12 0x34 0x56
-	// and returns int 123456
-
-	String scoreStr = data.substring(10, 12)
-		+ data.substring(15, 17)
-		+ data.substring(20, 22)
-		+ data.substring(25, 27);
-
-	return scoreStr.toInt();
 }
 
 void parseGameData(String data) {
@@ -577,30 +540,34 @@ void parseGameData(String data) {
 
 		Serial.print("Set player number: ");
 		Serial.println(playerNumberLabels[playerNumber]);
-	} else if (gameState == GAME_STATE_IN_GAME && data.startsWith("0x0100:")) {  // player 1 score
-		int score = parseScore(data);
-		playerScores[PLAYER1] = score;
+	} else if (gameState == GAME_STATE_IN_GAME && data.startsWith("0x0100:")) {  // player scores
+		String scoreStr;
 
-		Serial.print("Set player 1 score: ");
-		Serial.println(score);
-	} else if (gameState == GAME_STATE_IN_GAME && data.startsWith("0x0104:")) {  // player 2 score
-		int score = parseScore(data);
-		playerScores[PLAYER2] = score;
+		scoreStr = data.substring(10, 12)
+			+ data.substring(15, 17)
+			+ data.substring(20, 22)
+			+ data.substring(25, 27);
+		playerScores[PLAYER1] = scoreStr.toInt();
 
-		Serial.print("Set player 2 score: ");
-		Serial.println(score);
-	} else if (gameState == GAME_STATE_IN_GAME && data.startsWith("0x0108:")) {  // player 3 score
-		int score = parseScore(data);
-		playerScores[PLAYER3] = score;
+		scoreStr = data.substring(30, 32)
+			+ data.substring(35, 37)
+			+ data.substring(40, 42)
+			+ data.substring(45, 47);
+		playerScores[PLAYER2] = scoreStr.toInt();
 
-		Serial.print("Set player 3 score: ");
-		Serial.println(score);
-	} else if (gameState == GAME_STATE_IN_GAME && data.startsWith("0x010C:")) {  // player 4 score
-		int score = parseScore(data);
-		playerScores[PLAYER4] = score;
+		scoreStr = data.substring(50, 52)
+			+ data.substring(55, 57)
+			+ data.substring(60, 62)
+			+ data.substring(65, 67);
+		playerScores[PLAYER3] = scoreStr.toInt();
 
-		Serial.print("Set player 4 score: ");
-		Serial.println(score);
+		scoreStr = data.substring(70, 72)
+			+ data.substring(75, 77)
+			+ data.substring(80, 82)
+			+ data.substring(85, 87);
+		playerScores[PLAYER4] = scoreStr.toInt();
+
+		Serial.print("Set player scores.");
 	}
 }
 
