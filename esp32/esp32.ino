@@ -584,7 +584,7 @@ void setup()
 	wc.setInsecure();  // disables all SSL checks. don't use in production
 
 	server.on("/", []() {
-			server.send(200, "text/plain", "<i>SEE YOU PINBALL WIZARD...</i>");
+			server.send(200, "text/html", "<i>SEE YOU PINBALL WIZARD...</i>");
 			});
 
 	ElegantOTA.begin(&server);
