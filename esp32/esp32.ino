@@ -18,8 +18,8 @@
 #include "secrets.h"
 //#include "lets_encrypt_ca.h"
 
-//String portalAPI = "https://api.my.protospace.ca";
-String portalAPI = "https://api.spaceport.dns.t0.vc";
+String portalAPI = "https://api.my.protospace.ca";
+//String portalAPI = "https://api.spaceport.dns.t0.vc";
 
 #define RX1_PIN 9
 #define TX1_PIN 10
@@ -324,7 +324,7 @@ void processControllerState() {
 				break;
 			}
 
-			//https.addHeader("Authorization", PINBALL_API_TOKEN);
+			https.addHeader("Authorization", PINBALL_API_TOKEN);
 			result = https.GET();
 
 			Serial.printf("[CARD] Http code: %d\n", result);
@@ -393,7 +393,7 @@ void processControllerState() {
 
 				https.addHeader("Content-Type", "application/x-www-form-urlencoded");
 				https.addHeader("Content-Length", String(postData.length()));
-				//https.addHeader("Authorization", PINBALL_API_TOKEN);
+				https.addHeader("Authorization", PINBALL_API_TOKEN);
 				result = https.POST(postData);
 
 				Serial.printf("[SCORE] Http code: %d\n", result);
