@@ -28,7 +28,7 @@ HardwareSerial *gameSerial = &Serial1;  	// for ATmega
 
 #define GAME_DATA_DELAY_MS 250
 #define CONTROLLER_DELAY_MS 2000
-#define BONUS_WAIT_TIME 5000
+#define BONUS_WAIT_TIME 1000
 #define CONNECT_TIMEOUT_MS 30000
 #define ELLIPSIS_ANIMATION_DELAY_MS 1000
 #define HEARTBEAT_INTERVAL_MS 1000 * 60 * 60  // hourly
@@ -87,6 +87,7 @@ enum controllerStates {
 	CONTROLLER_IN_GAME,
 	CONTROLLER_GET_NAME,
 	CONTROLLER_WAIT_FOR_BONUS,
+	CONTROLLER_WAIT_FOR_BONUS_DELAY,
 	CONTROLLER_SEND_SCORES,
 	CONTROLLER_SEND_RETRY,
 	CONTROLLER_SUCCESS,
@@ -112,6 +113,7 @@ void processControllerState() {
 	static StaticJsonDocument<1024> jsonDoc;
 	static int retryCount;
 	static String gameId;
+	static int previousTotalScore;
 
 	String response;
 	String postData;
@@ -121,6 +123,10 @@ void processControllerState() {
 	int i;
 	int result;
 	HTTPClient https;
+	int totalScore = playerScores[0]
+		+ playerScores[1]
+		+ playerScores[2]
+		+ playerScores[3];
 
 	switch (controllerState) {
 		case CONTROLLER_BEGIN:
@@ -239,6 +245,8 @@ void processControllerState() {
 			playerScores[2] = 0;
 			playerScores[3] = 0;
 
+			previousTotalScore = 0;
+
 			playerCards[0] = "";
 			playerCards[1] = "";
 			playerCards[2] = "";
@@ -287,6 +295,16 @@ void processControllerState() {
 				break;
 			}
 
+			if (previousTotalScore > 0 && totalScore == 0) {
+				Serial.println("[GAME] Game reset via start button detected, restarting...");
+				lcd.clear();
+				lcd.print("BUTTON RESET");
+				nextControllerState = CONTROLLER_SEND_SCORES;
+				controllerState = CONTROLLER_DELAY;
+				break;
+			}
+			previousTotalScore = totalScore;
+
 			if (playerNumber >= 0) {
 				lcd.setCursor(0,0);
 
@@ -298,7 +316,12 @@ void processControllerState() {
 					lcd.print("             ");
 				} else {
 					lcd.print(playerNumberLabels[playerNumber]);
-					lcd.print(" SCAN NOW");
+
+					if (playerScores[playerNumber] == 0) {
+						lcd.print(" SCAN NOW");
+					} else {
+						lcd.print("         ");
+					}
 				}
 
 				lcd.setCursor(0,1);
@@ -353,8 +376,18 @@ void processControllerState() {
 			break;
 
 		case CONTROLLER_WAIT_FOR_BONUS:
-			if (millis() - timer > BONUS_WAIT_TIME) {  // overflow safe
+			if (totalScore == previousTotalScore) {
 				controllerState = CONTROLLER_SEND_SCORES;
+				break;
+			}
+			previousTotalScore = totalScore;
+
+			controllerState = CONTROLLER_WAIT_FOR_BONUS_DELAY;
+			break;
+
+		case CONTROLLER_WAIT_FOR_BONUS_DELAY:
+			if (millis() - timer > BONUS_WAIT_TIME) {  // overflow safe
+				controllerState = CONTROLLER_WAIT_FOR_BONUS;
 			}
 
 			break;
@@ -633,8 +666,9 @@ void loop()
 
 		if (controllerState == CONTROLLER_IN_GAME && playerNumber >= 0) {
 			bool nameIsSet = playerNames[playerNumber].length() > 0;
+			bool hasScore = playerScores[playerNumber] > 0;
 
-			if (!nameIsSet) {
+			if (!nameIsSet && !hasScore) {
 				scannedCard = data.substring(1, 11);
 
 				Serial.print("Card: ");
