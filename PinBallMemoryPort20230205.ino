@@ -1,6 +1,9 @@
 // Protospace is running code version PinBallMemoryPort20230201
 // The next version of code starts dated 2023 02 05
 // 
+// 2023-02-05 Tim Gopaul,, look into moving control pins to PC
+//
+//
 // 2023-01-29 Tim Gopaul troubleshoot bad first byte read
 // 2023-01-25 Tim Gopaul, added a second CE signal to control two dual port RAMs
 //
