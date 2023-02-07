@@ -59,27 +59,30 @@ int inputMode = 1;
 
 #include "CommandLine.h"
 
-
+// PORTB alternates between input and output for use by data read and write.
 #define DDRB_Output DDRB = B11111111   // all 1's is output for Atmega1284 PortB to write to IDC-7132 RAM
 #define DDRB_Input DDRB = B00000000    // set Atmega1284 Port B back to high inpeadence input all 0's 
 
-#define CEL_LOW  PORTD &=B11101111  // ChipEnable Left LOW PORTD PIN_PD4
-#define CEL_HIGH PORTD |=B00010000  // ChipEnable Left HIGH PORTD PIN_PD4
+// 2023-02-06 try moving control lines to PORTC Tim Gopaul
+// With control pins moved to Port C the Port D is left for Serial and other un assigned pin functions.
 
-#define RWL_LOW  PORTD &=B11011111  // R/W Left LOW PORTD PIN_PD5
-#define RWL_HIGH PORTD |=B00100000  // R/W Left HIGH PORTD PIN_PD5
+#define CEL2_LOW  PORTC &=B01111111  // ChipEnable Left LOW PORTC PIN_PC7
+#define CEL2_HIGH PORTC |=B10000000  // ChipEnable Left HIGH PORTC PIN_PC7
 
-#define OEL_LOW  PORTD &=B10111111  // OEL LEFT LOW PORTD PIN_PD6 
-#define OEL_HIGH PORTD |=B01000000  // OEL LEFT HIGH PORTD PIN_PD6 
+#define CEL_LOW  PORTC &=B10111111  // ChipEnable Left LOW PORTC PIN_PC6
+#define CEL_HIGH PORTC |=B01000000  // ChipEnable Left HIGH PORTC PIN_PC6
 
-#define CEL_OEL_LOW   PORTD &=B10101111  // ChipEnable with OutputEnable LOW PORTD PIN_PD6 PIN_PD4
-#define CEL_OEL_HIGH  PORTD |=B01010000  // ChipEnable with OutputEnable HIGH PORTDPIN_PD6  PIN_PD4
+#define RWL_LOW  PORTC &=B11011111  // R/W Left LOW PORTD PIN_PC5
+#define RWL_HIGH PORTC |=B00100000  // R/W Left HIGH PORTD PIN_PC5
 
-#define CEL2_LOW  PORTD &=B11110111  // ChipEnable Left LOW PORTD PIN_PD3
-#define CEL2_HIGH PORTD |=B00001000  // ChipEnable Left HIGH PORTD PIN_PD3
+#define OEL_LOW  PORTC &=B11101111  // OEL LEFT LOW PORTC PIN_PC4 
+#define OEL_HIGH PORTC |=B00010000  // OEL LEFT HIGH PORTC PIN_PC4 
 
-#define CEL2_OEL_LOW   PORTD &=B10110111  // ChipEnable with OutputEnable LOW PORTD PIN_PD6 PIN_PD3
-#define CEL2_OEL_HIGH  PORTD |=B01001000  // ChipEnable with OutputEnable HIGH PORTDPIN_PD6  PIN_PD3
+#define CEL_OEL_LOW   PORTC&=B10101111  // ChipEnable with OutputEnable LOW PORTC PIN_PC6 PIN_PC4
+#define CEL_OEL_HIGH  PORTC|=B01010000  // ChipEnable with OutputEnable HIGH PORTC PIN_PC6  PIN_PC4
+
+#define CEL2_OEL_LOW   PORTC &=B01101111  // ChipEnable with OutputEnable LOW PORTD PIN_PC7 PIN_PC4
+#define CEL2_OEL_HIGH  PORTC |=B10010000  // ChipEnable with OutputEnable HIGH PORTDPIN_PC7  PIN_PC4
 
 
 const byte BUSY_ = PIN_PD7;        // BUSY#  input pull up
@@ -151,7 +154,7 @@ unsigned int smaller( unsigned int a, unsigned int b){
 
 // ****** writeAddress *****
 void writeAddress(unsigned int address, byte dataByte){
-  PORTC = highByte(address);      //Set port C to the high byte of requested RAM address
+  PORTC = highByte(address) | 0xF8;      //Set port C to the high byte of requested RAM address
   PORTA = lowByte(address);       //Set Port A to the low byte of the requested RAM address
 
   #ifdef _DEBUG_
@@ -178,7 +181,7 @@ void writeAddress(unsigned int address, byte dataByte){
 // ****** readAddress *****
 byte readAddress(unsigned int address){
 
-  PORTC = highByte(address);      //Set port C to the high byte of requested RAM address
+  PORTC = highByte(address) | 0xF8;      //Set port C to the high byte of requested RAM address
   PORTA = lowByte(address);       //Set Port A to the low byte of the requested RAM address
 
 //  OEL_LOW;  //Set Output enable Left to low for outputing from RAM
@@ -242,11 +245,11 @@ volatile byte gameRamBuffer[ramSize];   // This is an array to hold the contents
 
 // ****** gameWriteAddress *****
 void gameWriteAddress(unsigned int address, byte dataByte){
-  PORTC = highByte(address);      //Set port C to the high byte of requested RAM address
+  PORTC = highByte(address) | 0xF8;      //Set port C to the high byte of requested RAM address
   PORTA = lowByte(address);       //Set Port A to the low byte of the requested RAM address
 
   #ifdef _DEBUG_
-    Serial.printf("Writing Address: 0x%04X: Data: 0x%02X\r\n", address, dataByte);
+    Serial.printf("Writing Game Address: 0x%04X: Data: 0x%02X\r\n", address, dataByte);
   #endif
 
   DDRB_Output;        // all 1's is output for Atmega1284 PortB to write to IDC-7132 RAM
@@ -269,7 +272,7 @@ void gameWriteAddress(unsigned int address, byte dataByte){
 // ****** gameReadAddress *****
 byte gameReadAddress(unsigned int address){
 
-  PORTC = highByte(address);      //Set port C to the high byte of requested RAM address
+  PORTC = highByte(address) | 0xF8;      //Set port C to the high byte of requested RAM address
   PORTA = lowByte(address);       //Set Port A to the low byte of the requested RAM address
 
 //  OEL_LOW;  //Set Output enable Left to low for outputing from RAM
@@ -321,14 +324,17 @@ void gameRefreshBuffer(unsigned int addrStart, unsigned int addrCount){
 
   unsigned int addrEnd = smaller((addrStart + addrCount), ramSize);     //bounds check on gameRamBuffer index 
 
-  OEL_LOW;        //OEL_ low in preparation for CEL2_
-
+// PORT C lower bits are used for Address.
+// PORT C upper bits are used for control.
+// Setting the PORT C address will always put HIGH into upper 5 bits of PORTC used for control.
+// This is ok because the control bits in Upper C go low after address is set.
+// Don't pull CE_ WE_ OE_ low unless it is in the loop with setting the address
 
   for (unsigned int address = addrStart; address < addrEnd; address++) { 
-    PORTC = highByte(address);      //Set port C to the high byte of requested RAM address
+    PORTC = highByte(address) | 0xF8;      //Set port C to the high byte of requested RAM address - ) 0xF8 will set control bits high
     PORTA = lowByte(address);       //Set Port A to the low byte of the requested RAM address
-
-    CEL2_LOW;                            // two NOP in Assembly code give a memory read time of 312 ns
+ 
+    CEL2_OEL_LOW;                        // two NOP in Assembly code give a memory read time of 312 ns
     __asm__ __volatile__ ("nop\n\t");   // take a nap.. a short nap 62.5 nanoseconds
     __asm__ __volatile__ ("nop\n\t");   // take a nap.. a short nap 62.5 nanoseconds    
 
@@ -338,12 +344,11 @@ void gameRefreshBuffer(unsigned int addrStart, unsigned int addrCount){
 //      } // Wait if the dual port Memory is busy
     
     byte dataByte = PINB;
-    CEL2_HIGH;             // deselect RAM chip as soon as read is done
+    CEL2_OEL_HIGH;             // deselect RAM chip as soon as read is done
     gameRamBuffer[address] = dataByte;  // load it into the buffer array to do printing later
 
   }
   
-  OEL_HIGH;       // disable the output
 }                 // void refreshBuffer(unsigned int addrStart, unsigned int addrCount){
 
 
@@ -448,18 +453,21 @@ void gameSaveMemory(unsigned int addrStart, unsigned int addrCount){
 void fillRange(unsigned int addrStart, unsigned int addrCount, byte dataByte){
   //configure to write to RAM
   DDRB_Output;        // all 1's is output for Atmega1284 PortB to write to IDC-7132 RAM
-  RWL_LOW;            //this is a bulk write so keep RWL_ low using CEL_ to trigger write
+//  RWL_LOW;            //this is a bulk write so keep RWL_ low using CEL_ to trigger write
+// 2023-02-06 Tim Gopaul Holding a control signal low can't be done now that Address setting always puts control lines high in PORTC
+// Put the RWL_LOW inside the loop after the address is set
 
   PORTB = dataByte;                                         // filling the range with the same byte. set it out side of loop once
   unsigned int addrEnd = smaller((addrStart + addrCount), ramSize);                            //bounds check on ramBuffer index  
   for (unsigned int address = addrStart; address < addrEnd; address++) { 
-    PORTC = highByte(address);      //Set port C to the high byte of requested RAM address
+    PORTC = highByte(address) | 0xF8;      //Set port C to the high byte of requested RAM address
     PORTA = lowByte(address);       //Set Port A to the low byte of the requested RAM address
 
     #ifdef _DEBUG_
     Serial.printf("Reading Address: 0x%04X: Data: 0x%02X\r\n", address, dataByte);
     #endif
 
+    RWL_LOW;  //There will be a 1/16M delay between RWL_LOW and CEL_LOW this is minimum and is 62.5nano seconds on ATmega1284
     CEL_LOW;
 
     while (digitalRead(BUSY_) == LOW){ // 15 is PIN_PD7 in arduino assignment 
@@ -467,47 +475,46 @@ void fillRange(unsigned int addrStart, unsigned int addrCount, byte dataByte){
     } // Wait if the dual port Memory is busy
 
     CEL_HIGH;
-        
+    RWL_HIGH;  //There will be a 1/16M delay between RWL_LOW and CEL_LOW this is minimum and is 62.5nano seconds on ATmega1284
+            
   } //loop back for next write
-  RWL_HIGH;             //this is a bulk write so keep RWL_ low using CEL_ to trigger write return to data input direction           
+     
   DDRB_Input;           // set Atmega1284 Port B back to high inpeadence input all 0's 
   Serial.printf("> fillRange addrStart 0x%04X, addrCount 0x%04X, data 0x%02X\n", addrStart, addrCount, dataByte);
-}
+} //fillRange
 
 // ****** fillRandomRange *****
 // this function receives a random databyte but needs to make its own for the fill
-void fillRandomRange(unsigned int addrStart, unsigned int addrCount, byte dataByte){
+void fillRandomRange(unsigned int addrStart, unsigned int addrCount ){
 
 unsigned int addrEnd = smaller((addrStart + addrCount), ramSize);     //bounds check on ramBuffer index 
   //configure to write to RAM
   DDRB_Output;    // all 1's is output for Atmega1284 PortB to write to IDC-7132 RAM
 
-//RWL_LOW;        //this is a bulk write so keep RWL_ low using CEL_ to trigger write
-  
   for (unsigned int address = addrStart; address < addrEnd; address++) { 
 
     #ifdef _DEBUG_
     Serial.printf("Reading Address: 0x%04X: Data: 0x%02X\r\n", address, dataByte);
     #endif    
     
-    PORTC = highByte(address);      //Set port C to the high byte of requested RAM address
+    PORTC = highByte(address) | 0xF8;      //Set port C to the high byte of requested RAM address
     PORTA = lowByte(address);       //Set Port A to the low byte of the requested RAM address
     
-    while (digitalRead(BUSY_) == LOW){ // 15 is PIN_PD7 in arduino assignment 
-      Serial.printf("> RAM BUSY_\r\n");
-    } // Wait if the dual port Memory is busy
-
-    dataByte = (byte)random(0x100);
+    byte dataByte = (byte)random(0x100);
     PORTB = dataByte;
 
     RWL_LOW;        //try write low per byte rather than bulk
     CEL_LOW;
+
+    while (digitalRead(BUSY_) == LOW){ // 15 is PIN_PD7 in arduino assignment 
+      Serial.printf("> RAM BUSY_\r\n");
+    } // Wait if the dual port Memory is busy
+    
     CEL_HIGH;
     RWL_HIGH;
 
     } //go back for next address write
     
-  RWL_HIGH;
   DDRB_Input;        // set Atmega1284 Port B back to high inpeadence input all 0's 
 
 }
@@ -539,14 +546,17 @@ void refreshBuffer(unsigned int addrStart, unsigned int addrCount){
 
   unsigned int addrEnd = smaller((addrStart + addrCount), ramSize);     //bounds check on ramBuffer index 
 
-  OEL_LOW;        //OEL_ low in preparation for CEL_
-
+// PORT C lower bits are used for Address.
+// PORT C upper bits are used for control.
+// Setting the PORT C address will always put HIGH into upper 5 bits of PORTC used for control.
+// This is ok because the control bits in Upper C go low after address is set.
+// Don't pull CE_ WE_ OE_ low unless it is in the loop with setting the address
 
   for (unsigned int address = addrStart; address < addrEnd; address++) { 
-    PORTC = highByte(address);      //Set port C to the high byte of requested RAM address
+    PORTC = highByte(address) | 0xF8;      //Set port C to the high byte of requested RAM address
     PORTA = lowByte(address);       //Set Port A to the low byte of the requested RAM address
 
-    CEL_LOW;                            // two NOP in Assembly code give a memory read time of 312 ns
+    CEL_OEL_LOW;                            // two NOP in Assembly code give a memory read time of 312 ns
     __asm__ __volatile__ ("nop\n\t");   // take a nap.. a short nap 62.5 nanoseconds
     __asm__ __volatile__ ("nop\n\t");   // take a nap.. a short nap 62.5 nanoseconds    
 
@@ -556,13 +566,10 @@ void refreshBuffer(unsigned int addrStart, unsigned int addrCount){
 //      } // Wait if the dual port Memory is busy
     
     byte dataByte = PINB;
-    CEL_HIGH;             // deselect RAM chip as soon as read is done
+    CEL_OEL_HIGH;             // deselect RAM chip as soon as read is done
     ramBuffer[address] = dataByte;  // load it into the buffer array to do printing later
-
   }
-  
-  OEL_HIGH;       // disable the output
-}                 // void refreshBuffer(unsigned int addrStart, unsigned int addrCount){
+}  // void refreshBuffer(unsigned int addrStart, unsigned int addrCount){
 
 
 // ***** dumpBuffRange *****
@@ -739,7 +746,7 @@ void testMemory(unsigned int addrStart, unsigned int addrCount, int testLoops) {
 
   for (int i = 0; i < testLoops; i++){
     Serial.printf(">Memory loop test %d\n", i);  
-    fillRandomRange(addrStart, addrCount, 1); //dataByte is recreated for each address of range
+    fillRandomRange(addrStart, addrCount); //dataByte is recreated for each address of range
     refreshBuffer(addrStart, addrCount);
     compareBuffer(addrStart, addrCount);
   }
@@ -761,11 +768,17 @@ void setup() {
   #ifdef _DEBUG_
     Serial.println("_DEBUG_ is defined");
   #endif
-  
+
+  PINA= B11111111;      //This might be the way to set input pull-up before changing PORTA direction to output
+  PORTA = B11111111;     // Set low Address bits HIGH setting pins high before DDRA will make sure pins source current on output set
   DDRA = B11111111;     // PortA 0 to 7 are the low address out for the 2Kx8 RAM
-  PORTA = B00000000;     // Set low Address bits low
+  PORTA = B11111111;     // Set low Address bits HIGH setting pins high before DDRA will make sure pins source current on output set
+  PORTC = B11111111;     //Set high Address bits HIGH setting pins high before DDRA will make sure pins source current on output set
+  PINC= B11111111;      //This might be the way to set input pull-up before changing PORTC direction to output
   DDRC = B11111111;   // PORTC 0 - 7  are the high byte of address output  only 0,1,2 used
-  PORTC = B00000000;     //Set high Address bits low
+  PORTC = B11111111;    // PORTC should be output high on initialization. Address all 1's and control bits all high
+
+// With control pins moved to Port C the Port D is left for Serial and other un assigned pin functions.
   
 // For DATA bus PortB will be used alternating between input and output
   PORTB = B00000000;       //set pullups but maybe not needed PORTB is output PINB is input

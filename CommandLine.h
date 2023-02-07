@@ -102,7 +102,7 @@ void writeAddress(unsigned int address, byte dataByte);
 
 byte readAddress(unsigned int address);
 void fillRange(unsigned int addrStart, unsigned int addrCount, byte dataByte);
-void fillRandomRange(unsigned int addrStart, unsigned int addrCount, byte dataByte);
+void fillRandomRange(unsigned int addrStart, unsigned int addrCount);
 void dumpRange(unsigned int addrStart, unsigned int addrCount);
 void gameDumpRange(unsigned int addrStart, unsigned int addrCount);
 void dumpBuffRange(unsigned int addrStart, unsigned int addrCount);
@@ -320,11 +320,10 @@ int fillCommand() {
 int fillRandomCommand() {
   unsigned int addrStart = readNumber();
   unsigned int addrCount = readNumber();
-  byte dataByte = (byte)random(0x100);
 
-    fillRandomRange(addrStart, addrCount, dataByte); //dataByte is recreated for each address of range
+    fillRandomRange(addrStart, addrCount); //dataByte is recreated for each address of range
  
-  return dataByte;
+  return 0;
 }
 
 // ***** saveMemoryCommand *****
