@@ -27,7 +27,7 @@ String portalAPI = "https://api.my.protospace.ca";
 HardwareSerial *gameSerial = &Serial1;  	// for ATmega
 
 #define GAME_DATA_DELAY_MS 250
-#define CONTROLLER_DELAY_MS 2000
+#define CONTROLLER_DELAY_MS 1000
 #define BONUS_WAIT_TIME 1000
 #define CONNECT_TIMEOUT_MS 30000
 #define ELLIPSIS_ANIMATION_DELAY_MS 1000
