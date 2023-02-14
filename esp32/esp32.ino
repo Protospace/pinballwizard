@@ -51,6 +51,7 @@ static const char* playerNumberLabels[] = {"PLAYER1", "PLAYER2", "PLAYER3", "PLA
 static const char* playerNumberLabelsShort[] = {"P1", "P2", "P3", "P4"};
 int playerNumber = PLAYER_UNKNOWN;
 
+int totalScore = 0;
 int playerScores[NUM_MAX_PLAYERS];
 String scannedCard = "";
 String playerCards[NUM_MAX_PLAYERS];
@@ -123,10 +124,6 @@ void processControllerState() {
 	int i;
 	int result;
 	HTTPClient https;
-	int totalScore = playerScores[0]
-		+ playerScores[1]
-		+ playerScores[2]
-		+ playerScores[3];
 
 	switch (controllerState) {
 		case CONTROLLER_BEGIN:
@@ -240,6 +237,8 @@ void processControllerState() {
 			gameId = String(now);
 			retryCount = 0;
 
+			totalScore = 0;
+
 			playerScores[0] = 0;
 			playerScores[1] = 0;
 			playerScores[2] = 0;
@@ -317,7 +316,7 @@ void processControllerState() {
 				} else {
 					lcd.print(playerNumberLabels[playerNumber]);
 
-					if (playerScores[playerNumber] == 0) {
+					if (playerScores[playerNumber] <= 10000) {
 						lcd.print(" SCAN NOW");
 					} else {
 						lcd.print("         ");
@@ -538,6 +537,8 @@ void processDataState() {
 void parseGameData(String data) {
 	int num;
 	String scoreStr;
+	int score;
+	int tmpTotalScore = 0;
 
 	if (data.startsWith("0x00A0:")) {  // game info
 		num = data.substring(56, 57).toInt();
@@ -560,25 +561,47 @@ void parseGameData(String data) {
 			+ data.substring(15, 17)
 			+ data.substring(20, 22)
 			+ data.substring(25, 27);
-		playerScores[PLAYER1] = scoreStr.toInt();
+		score = scoreStr.toInt();
+
+		if (score > playerScores[PLAYER1]) {
+			playerScores[PLAYER1] = score;
+		}
+		tmpTotalScore += score;
 
 		scoreStr = data.substring(30, 32)
 			+ data.substring(35, 37)
 			+ data.substring(40, 42)
 			+ data.substring(45, 47);
-		playerScores[PLAYER2] = scoreStr.toInt();
+		score = scoreStr.toInt();
+
+		if (score > playerScores[PLAYER2]) {
+			playerScores[PLAYER2] = score;
+		}
+		tmpTotalScore += score;
 
 		scoreStr = data.substring(50, 52)
 			+ data.substring(55, 57)
 			+ data.substring(60, 62)
 			+ data.substring(65, 67);
-		playerScores[PLAYER3] = scoreStr.toInt();
+		score = scoreStr.toInt();
+
+		if (score > playerScores[PLAYER3]) {
+			playerScores[PLAYER3] = score;
+		}
+		tmpTotalScore += score;
 
 		scoreStr = data.substring(70, 72)
 			+ data.substring(75, 77)
 			+ data.substring(80, 82)
 			+ data.substring(85, 87);
-		playerScores[PLAYER4] = scoreStr.toInt();
+		score = scoreStr.toInt();
+
+		if (score > playerScores[PLAYER4]) {
+			playerScores[PLAYER4] = score;
+		}
+		tmpTotalScore += score;
+
+		totalScore = tmpTotalScore;
 
 		Serial.print("Set player scores.");
 	}
@@ -666,9 +689,9 @@ void loop()
 
 		if (controllerState == CONTROLLER_IN_GAME && playerNumber >= 0) {
 			bool nameIsSet = playerNames[playerNumber].length() > 0;
-			bool hasScore = playerScores[playerNumber] > 0;
+			bool hasSomeScore = playerScores[playerNumber] > 10000;
 
-			if (!nameIsSet && !hasScore) {
+			if (!nameIsSet && !hasSomeScore) {
 				scannedCard = data.substring(1, 11);
 
 				Serial.print("Card: ");
