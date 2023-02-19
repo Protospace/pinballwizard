@@ -1,4 +1,5 @@
 /*****************************************************************************
+  2023-01-18 Tim Gopaul add command BusyFaultCount to report how many Busy interrupts were generated since last reboot
   2023-01-11/12 Tim Gopaul  Removed getHexLineFromSerialPort.. use the main parsing code get command
   2023-01-11 Tim Gopaul added call to make commands case insensitive.
   2023-01-08 Tim Gopaul - add load command to read in Hex format string and place in RAM memory
@@ -95,7 +96,8 @@
 #include <errno.h>  // https://stackoverflow.com/questions/26080829/detecting-strtol-failure when strtol fails it returns zero and an errno
 #include <limits.h> // used to find LONG_MIN and LONG_MAX
 
-
+extern volatile unsigned int BusyFaultCount;
+extern volatile unsigned int ShadowFaultCount;
 
 //Function Prototypes from .ino file
 void writeAddress(unsigned int address, byte dataByte);
@@ -151,6 +153,9 @@ const char *testMemoryCommandToken       = "testmemory";    // destructive test 
 const char *gameReadCommandToken      = "gameread";   // read address ignore
 const char *gameWriteCommandToken     = "gamewrite";  // write address byte
 const char *gameDumpCommandToken  = "gameDump"; // Dumps game memory from starting address with byte count
+
+const char *BusyFaultCountToken = "busyfaultcount"; // displays the accumulative count of the busy interrupts
+const char *ShadowFaultCountToken = "shadowfaultcount"; // displays the accumulative count of the busy interrupts
 
 /*************************************************************************************************************
     getCommandLineFromSerialPort()
@@ -373,6 +378,13 @@ int gameDumpCommand() {
   return addrStart;
 }
 
+void busyFaultCountCommand(){
+  Serial.printf("> Cumlative fault count since last Atmega1284 reboot: %d\n", BusyFaultCount );   
+}
+
+void shadowFaultCountCommand(){
+  Serial.printf("> Cumlative fault count since last Atmega1284 reboot: %d\n", ShadowFaultCount );   
+}
 
 // ***** testMemmory *****
 int testMemoryCommand(){
@@ -527,6 +539,15 @@ DoMyCommand(char * commandLine) {
   else if (strcasecmp(ptrToCommandName, testMemoryCommandToken) == 0) {           //Modify here
       result = testMemoryCommand();                                       
   }
+  
+  else if (strcasecmp(ptrToCommandName, BusyFaultCountToken) == 0) {           //Modify here
+      busyFaultCountCommand();                                       
+  }
+  
+  else if (strcasecmp(ptrToCommandName, ShadowFaultCountToken) == 0) {           //Modify here
+      shadowFaultCountCommand();                                       
+  }
+  
   else {
       nullCommand(ptrToCommandName);
     }

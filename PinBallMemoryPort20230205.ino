@@ -1,7 +1,12 @@
 // Protospace is running code version PinBallMemoryPort20230201
 // The next version of code starts dated 2023 02 05
 // 
-// 2023-02-05 Tim Gopaul,, look into moving control pins to PC
+// 2023-02-18 Tim Gopaul, trouble getting PCINT30 working. changed to interruptPin = PIN_PD2 which gives digitalPinToInterrupt(interruptPin) as 0
+// 2023-02-14 Tim Gopaul, attach an interrupt low edge to pin 20 PD6 PCINT30
+//                        connect interrupt to _BusyRight to indicate the Pinball live memory was issued a wait.. which likey corrupted game ram
+//                        What to do. ..maybe save high score to portal then restart the pinball machine or issue a warning to the LCD screen
+//
+// 2023-02-05 Tim Gopaul,, look into moving control pins to PC done
 //
 //
 // 2023-01-29 Tim Gopaul troubleshoot bad first byte read
@@ -85,7 +90,17 @@ int inputMode = 1;
 #define CEL2_OEL_HIGH  PORTC |=B10010000  // ChipEnable with OutputEnable HIGH PORTDPIN_PC7  PIN_PC4
 
 
-const byte BUSY_ = PIN_PD7;        // BUSY#  input pull up
+const byte BUSY_ = PIN_PD7;        // BUSY#  input pull up This is for the Atmega side Busy signals
+
+const byte BUSY_IRQPIN = PIN_PD2;  //BUSY_FAULT will go low if the live game ram receives a Busy signal
+volatile byte BusyStateIRQ = HIGH;
+volatile unsigned int BusyFaultAddress;
+volatile unsigned int BusyFaultCount = 0;   // count the number of busy faults and report when given the BusyFaultCount command 
+
+const byte SHADOW_IRQPIN = PIN_PD3;  //BUSY_FAULT will go low if the live game ram receives a Busy signal
+volatile byte ShadowStateIRQ = HIGH;
+volatile unsigned int ShadowFaultAddress;
+volatile unsigned int ShadowFaultCount = 0;   // count the number of busy faults and report when given the BusyFaultCount command 
 
 
 volatile byte ramBuffer[ramSize];   // This is an array to hold the contents of memory
@@ -141,6 +156,13 @@ int helpText(){
   Serial.println(">*                                *");
   Serial.println(">*   Enter numbers as decimal or  *");
   Serial.println(">*   0xNN  0X55 for HEX           *");
+  Serial.println(">*                                *");
+  Serial.println(">*   BusyFaultCount will give the *");
+  Serial.println(">*   count of Busy Interruptes    *");
+  Serial.println(">*                                *");
+  Serial.println(">*   ShadowFaultCount gives the   *");
+  Serial.println(">*   count of Shadow Busy         *");
+  Serial.println(">*   Interruptes                  *");
   Serial.println(">*                                *");
   Serial.println(">**********************************");
   Serial.println();  
@@ -752,10 +774,26 @@ void testMemory(unsigned int addrStart, unsigned int addrCount, int testLoops) {
   }
 }
 
+void BusyFaultWarning(){
+  BusyStateIRQ = LOW;
+  ++BusyFaultCount;
+  BusyFaultAddress = (((PORTC & B0000111) << 8 ) + PORTA);
+  }
 
+void ShadowFaultWarning(){
+  ShadowStateIRQ = LOW;
+  ++ShadowFaultCount;
+  ShadowFaultAddress = (((PORTC & B0000111) << 8 ) + PORTA);
+  }
 
 // ***** setup ***** -----------------------------------------------
 void setup() {
+
+  pinMode(BUSY_IRQPIN, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(BUSY_IRQPIN),BusyFaultWarning, FALLING);
+
+  pinMode(SHADOW_IRQPIN, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(SHADOW_IRQPIN),ShadowFaultWarning, FALLING);
 
   // seed the random mumber generator
   randomSeed(millis()); //initialize pseudo random number
@@ -803,7 +841,20 @@ void setup() {
 
 // ***** loop ***** ----------------------------------------
 void loop() {
-  bool received = getCommandLineFromSerialPort(CommandLine);      //global CommandLine is defined in CommandLine.h
+
+  if (BusyStateIRQ == LOW ) {
+    BusyStateIRQ = HIGH; 
+    Serial.printf("\n> PIN_PD2 IRQ 0 Busy fault Live Game RAM issued a BUSY, Address: 0x%04X\n", BusyFaultAddress );
+    Serial.printf("> Cumlative fault count since last Atmega1284 reboot: %d\n", BusyFaultCount );
+  }
+
+  if (ShadowStateIRQ == LOW ) {
+    ShadowStateIRQ = HIGH; 
+    Serial.printf("\n> PIN_PD3 IRQ 1 Busy fault Shadow RAM issued a BUSY, Address: 0x%04X\n", ShadowFaultAddress );
+    Serial.printf("> Cumlative Shadow fault count since last Atmega1284 reboot: %d\n", ShadowFaultCount );
+  }
+
+bool received = getCommandLineFromSerialPort(CommandLine);      //global CommandLine is defined in CommandLine.h
   if (received) {
     switch(inputMode){
       case CommandMode:
