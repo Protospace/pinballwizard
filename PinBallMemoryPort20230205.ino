@@ -1,7 +1,7 @@
 // Protospace is running code version PinBallMemoryPort20230201
 // The next version of code starts dated 2023 02 05
 // 
-// 2023-02-18 Tim Gopaul, trouble getting PCINT30 working. changed to interruptPin = PIN_PD2 which gives digitalPinToInterrupt(interruptPin) as 0
+// 2023-02-18 Tim Gopaul, trouble getting PCINT30 working. changed to interrup Pin = PIN_PD2 which gives digitalPinToInterrupt(interruptPin) as 0
 // 2023-02-14 Tim Gopaul, attach an interrupt low edge to pin 20 PD6 PCINT30
 //                        connect interrupt to _BusyRight to indicate the Pinball live memory was issued a wait.. which likey corrupted game ram
 //                        What to do. ..maybe save high score to portal then restart the pinball machine or issue a warning to the LCD screen
@@ -55,14 +55,17 @@
 /* email address in distributed copies, and let me know about any bugs */
 
 //#define _DEBUG_
-#define MAXHEXLINE 16     //for Hex record length
-const int ramSize =  2048;  
 
-#define CommandMode 1     //inputMode will flip between command and data entry
-#define DataMode 2        // 2023-01-09 Tim Gopaul
-int inputMode = 1;
 
-#include "CommandLine.h"
+
+#define MAXHEXLINE 16         // for Hex record length
+const int ramSize =  2048;    // don't change this without also defining address bits PORTC has limited bits available 
+
+#define CommandMode 1         // inputMode will flip between command and data entry, commands defined in CommandLine.h file
+#define DataMode 2            // 2023-01-09 Tim Gopaul.. in DataMode the UART stream is read as an Intel HEX file
+#define gameDataMode 3            // 2023-01-09 Tim Gopaul.. in DataMode the UART stream is read as an Intel HEX file
+
+int inputMode = CommandMode;  // on startup the input is waiting for commands
 
 // PORTB alternates between input and output for use by data read and write.
 #define DDRB_Output DDRB = B11111111   // all 1's is output for Atmega1284 PortB to write to IDC-7132 RAM
@@ -119,52 +122,55 @@ void ramBufferInit(){
     }
 }
 
+
 // ****** helpText *****
 int helpText(){
-  Serial.println(">**********************************");
-  Serial.println(">*                                *");
+  Serial.println(">****************************************");
+  Serial.println(">*                                      *");
   Serial.printf(">*   Compile Date: %s\n", __DATE__ );
   Serial.printf(">*   Compile Time: %s\n", __TIME__ );
-  Serial.println(">*                                *");
-  Serial.println(">*   Untility program to read RAM *");
-  Serial.println(">*   Tim Gopaul for Protospace    *");
-  Serial.println(">*                                *");
-  Serial.println(">*   Enter numbers as baseTen,or  *");
-  Serial.println(">*   Enter as 0xNN for hex format *");
-  Serial.println(">*                                *");
-  Serial.println(">*   add   integer integer        *");
-  Serial.println(">*   sub   integer integer        *");
-  Serial.println(">*   read  address                *");
-  Serial.println(">*   write address databyte       *");
-  Serial.println(">*   dump  start count            *");
-  Serial.println(">*   dumpBuffer  start count      *");
-  Serial.println(">*   fill  start count databyte   *");
-  Serial.println(">*   fillRandom  start count      *");
-  Serial.println(">*   save startAddress count      *");
-  Serial.println(">*   load Intelhex record line    *");
-  Serial.println(">*   testMemory start count       *");
-  Serial.println(">*                                *");
-  Serial.println(">*   game commands work directly  *");
-  Serial.println(">*   Game RAM.                    *");
-  Serial.println(">*   Use only when pinball off    *");
-  Serial.println(">*                                *"); 
-  Serial.println(">*   gameRead address             *");
-  Serial.println(">*   gameWrite address databyte   *");
-  Serial.println(">*   gameDump start count         *");
-  Serial.println(">*                                *"); 
+  Serial.println(">*                                      *");
+  Serial.println(">*   Untility program to read RAM       *");
+  Serial.println(">*   Tim Gopaul for Protospace          *");
+  Serial.println(">*                                      *");
+  Serial.println(">*   Enter numbers as baseTen,or        *");
+  Serial.println(">*   Enter as 0xNN for hex format       *");
+  Serial.println(">*                                      *");
+  Serial.println(">*   add   integer integer              *");
+  Serial.println(">*   sub   integer integer              *");
+  Serial.println(">*   read  address                      *");
+  Serial.println(">*   write address databyte             *");
+  Serial.println(">*   dump  start count                  *");
+  Serial.println(">*   dumpBuffer  start count            *");
+  Serial.println(">*   fill  start count databyte         *");
+  Serial.println(">*   fillRandom  start count            *");
+  Serial.println(">*   save startAddress count            *");
+  Serial.println(">*   load Intelhex record line          *");
+  Serial.println(">*   testMemory start count             *");
+  Serial.println(">*                                      *");
+  Serial.println(">*   game commands work directly        *");
+  Serial.println(">*   Game RAM.                          *");
+  Serial.println(">*   Use only when pinball off          *");
+  Serial.println(">*                                      *"); 
+  Serial.println(">*   gameRead address                   *");
+  Serial.println(">*   gameWrite address databyte         *");
+  Serial.println(">*   gameDump start count               *");
+  Serial.println(">*                                      *"); 
   
-  Serial.println(">*                                *");
-  Serial.println(">*   Enter numbers as decimal or  *");
-  Serial.println(">*   0xNN  0X55 for HEX           *");
-  Serial.println(">*                                *");
-  Serial.println(">*   BusyFaultCount will give the *");
-  Serial.println(">*   count of Busy Interruptes    *");
-  Serial.println(">*                                *");
-  Serial.println(">*   ShadowFaultCount gives the   *");
-  Serial.println(">*   count of Shadow Busy         *");
-  Serial.println(">*   Interruptes                  *");
-  Serial.println(">*                                *");
-  Serial.println(">**********************************");
+  Serial.println(">*                                      *");
+  Serial.println(">*   Enter numbers as decimal or        *");
+  Serial.println(">*   0xNN  0X55 for HEX                 *");
+  Serial.println(">*                                      *");
+  Serial.println(">*   BusyFaultCount will give the       *");
+  Serial.println(">*   count of Busy Interruptes          *");
+  Serial.println(">*   PIN_PD2 IRQ 0                      *");
+  Serial.println(">*                                      *");
+  Serial.println(">*   ShadowFaultCount gives the         *");
+  Serial.println(">*   count of Shadow Busy Interruptes   *");
+  Serial.println(">*   PIN_PD3 IRQ 1                      *");
+  Serial.println(">*                                      *");
+  Serial.println(">*                                      *");
+  Serial.println(">****************************************");
   Serial.println();  
   return(0);
 }
@@ -173,6 +179,7 @@ unsigned int smaller( unsigned int a, unsigned int b){
   return (b < a) ? b : a;
 }
 
+#include "CommandLine.h"
 
 // ****** writeAddress *****
 void writeAddress(unsigned int address, byte dataByte){
@@ -371,66 +378,16 @@ void gameRefreshBuffer(unsigned int addrStart, unsigned int addrCount){
 
   }
   
-}                 // void refreshBuffer(unsigned int addrStart, unsigned int addrCount){
+}                 // void game refreshBuffer(unsigned int addrStart, unsigned int addrCount){
 
-
-// ***** dumpBuffRange *****
-void gameDumpBuffRange(unsigned int addrStart, unsigned int addrCount){
-
-  gameRefreshBuffer(addrStart, addrCount); // The buffer has read the memory now dump to the screen
-
-  unsigned int addrEnd = smaller((addrStart + addrCount), ramSize);     //bounds check on gameRamBuffer index 
-
-  Serial.printf("> Dump Buffer: 0x%04X: To Address Data: 0x%04X: \n", addrStart, addrEnd -1);
-  if ((addrStart % 16) != 0) Serial.printf("\n0x%04X: ", addrStart);
-  for (unsigned int address = addrStart; address < addrEnd; address++) { 
-  
-    if ((address % 16) == 0) Serial.printf("\n0x%04X: ", address);
-    Serial.printf("0x%02X ", gameRamBuffer[address]);
-
-    #ifdef _DEBUG_
-    Serial.printf("Reading Address: 0x%04X: Data: 0x%02X\n", address, gameRamBuffer[address]);
-    #endif
-  }
-  Serial.println();
-  Serial.println();
-
-//Dump the buffer displaying contents as ASCII if printable
-
-  Serial.printf("> Dump Buffer ASCII: 0x%04X: To Address Data: 0x%04X: \n", addrStart, addrEnd -1);
-  Serial.println();
-  
-  //creat column headings from low address nibble
-  Serial.print("        "); //print some leading space
-  for (unsigned int i = 0; i <= 0x0f;i++)
-    Serial.printf( "%1X ",i);
-  
-  if ((addrStart % 16) != 0) Serial.printf("\n0x%04X: ", addrStart);
-  for (unsigned int address = addrStart; address < addrEnd ; address++) { 
-  
-    if ((address % 16) == 0) Serial.printf("\n0x%04X: ", address);
-    if (isPrintable(gameRamBuffer[address]))
-      Serial.printf("%c ", (char)gameRamBuffer[address]);
-    else
-      Serial.printf("%c ", ' ');
-  }
-  
-  Serial.println();
-  Serial.println(); 
-
-  //call the saveMemory function to see if it displays the buffer properly
-  gameSaveMemory(addrStart, addrCount);
-
-} //void gameDumpBuffRange(unsigned int addrStart, unsigned int addrCount)
-
-
+// 2023-02-19 Tim Gopaul remove the GameDumpBuffer that accesses the live RAM
 
 // ***** gameSaveMemory *****
 void gameSaveMemory(unsigned int addrStart, unsigned int addrCount){
 
   gameRefreshBuffer(addrStart, addrCount); //This will copy the physical IDC7132 RAM to the Atmel gameRamBuffer[2048]
                                        
-  // Only refresh the buffer with the range of bytes needed to avoid contention.
+  // Only refresh the buffer with the range of bytes needed (to avoid contention.)
   // copy the RAM memory to a buffer array before processing output
   // Global array is used gameRamBuffer[2048] 
 
@@ -743,6 +700,18 @@ void loadMemory(){
   // .. add CTRL-C and esc as ways to terminate the input
 }
 
+// ***** gameLoadMemory *****
+void gameLoadMemory(){
+  Serial.printf("> Waiting for Intel Hex input records or end of file record :00000001FF\n");
+  inputMode = gameDataMode;  
+  // This flips to DataMode so that main loop will dispatch input to build Intel Hex input line
+  // once in DataMode the main loop will add characters to a buffer line until enter is pressed Linefeed.
+  // in DataMode each line is interpretted as an Intel Hex record.. type 01 and type 00 supported
+  // to leave DataMode the input must receive the Intel Hex end of file record.
+  // :00000001FF 
+  // .. add CTRL-C and esc as ways to terminate the input
+}
+
 // ***** compareBuffer *****
 void compareBuffer( unsigned int addrStart, unsigned int addrCount){
 
@@ -861,7 +830,10 @@ bool received = getCommandLineFromSerialPort(CommandLine);      //global Command
         DoMyCommand(CommandLine);
         break;
       case DataMode:
-        DoMyHexLine(CommandLine);
+        DoMyHexLine(CommandLine, DataMode);
+        break;
+      case gameDataMode:
+        DoMyHexLine(CommandLine, gameDataMode);
         break;
       default:
         break;

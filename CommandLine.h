@@ -109,8 +109,10 @@ void dumpRange(unsigned int addrStart, unsigned int addrCount);
 void gameDumpRange(unsigned int addrStart, unsigned int addrCount);
 void dumpBuffRange(unsigned int addrStart, unsigned int addrCount);
 void saveMemory(unsigned int addrStart, unsigned int addrCount);
+void gameSaveMemory(unsigned int addrStart, unsigned int addrCount);
 void testMemory(unsigned int addrStart, unsigned int addrCount);
 void loadMemory();
+void gameLoadMemory();
 int helpText();
 void testMemory(unsigned int addrStart, unsigned int addrCount, int testLoops);
 
@@ -153,6 +155,8 @@ const char *testMemoryCommandToken       = "testmemory";    // destructive test 
 const char *gameReadCommandToken      = "gameread";   // read address ignore
 const char *gameWriteCommandToken     = "gamewrite";  // write address byte
 const char *gameDumpCommandToken  = "gameDump"; // Dumps game memory from starting address with byte count
+const char *gameSaveMemoryCommandToken       = "gamesave";    // creates Intel Hex output from ram range.
+const char *gameLoadMemoryCommandToken       = "gameload";    // takes an Intel Hex formatted line and writes it to RAM
 
 const char *BusyFaultCountToken = "busyfaultcount"; // displays the accumulative count of the busy interrupts
 const char *ShadowFaultCountToken = "shadowfaultcount"; // displays the accumulative count of the busy interrupts
@@ -346,6 +350,21 @@ int loadMemoryCommand() {
   return 0;
 }
 
+// ***** gameSaveMemoryCommand *****
+int gameSaveMemoryCommand() {
+  unsigned int addrStart = readNumber();
+  unsigned int addrCount = readNumber();
+
+  gameSaveMemory(addrStart, addrCount); 
+  return 0;
+}
+
+// ***** gameLoadMemoryCommand *****
+int gameLoadMemoryCommand() {
+  gameLoadMemory(); 
+  return 0;
+}
+
 // ***** Help Text *****
 int helpCommand() {
   helpText(); 
@@ -401,7 +420,7 @@ int testMemoryCommand(){
    DoMyHexLine
 */
 bool
-DoMyHexLine(char * HexLine) {
+DoMyHexLine(char * HexLine, int writeMode) {
 
 //  char * endOfFile = ":00000001FF";   //For Intel Hex file transfer a the final line must match.. to switch to command inputMode
 
@@ -451,7 +470,16 @@ DoMyHexLine(char * HexLine) {
     int address = addrStart;
     HLBIndex =4;                                 //Data starts at index 4 in HexLineBytes
     for(unsigned int i = 0; i < hexCount; i++){
-      writeAddress( address++, HexLineBytes[HLBIndex++]);
+      switch(writeMode){  
+        case DataMode: 
+          writeAddress( address++, HexLineBytes[HLBIndex++]);
+          break;
+        case gameDataMode:
+          gameWriteAddress( address++, HexLineBytes[HLBIndex++]);
+          break;
+      default:
+        break;
+      }
     } 
   }
 
@@ -531,7 +559,13 @@ DoMyCommand(char * commandLine) {
   else if (strcasecmp(ptrToCommandName, loadMemoryCommandToken) == 0) {           //Modify here
       result = loadMemoryCommand();                                       
   }
-
+  else if (strcasecmp(ptrToCommandName, gameSaveMemoryCommandToken) == 0) {           //Modify here
+      result = saveMemoryCommand();                                       
+      Serial.println();
+  }
+  else if (strcasecmp(ptrToCommandName, gameLoadMemoryCommandToken) == 0) {           //Modify here
+      result = loadMemoryCommand();                                       
+  }
   else if (strcasecmp(ptrToCommandName, helpCommandToken) == 0) {           //Modify here
       result = helpText();                                       
   }
