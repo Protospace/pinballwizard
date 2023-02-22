@@ -603,7 +603,7 @@ void parseGameData(String data) {
 
 		totalScore = tmpTotalScore;
 
-		Serial.print("Set player scores.");
+		Serial.println("Set player scores.");
 	}
 }
 
