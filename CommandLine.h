@@ -1,5 +1,5 @@
 /*****************************************************************************
-  2023-01-18 Tim Gopaul add command BusyFaultCount to report how many Busy interrupts were generated since last reboot
+  2023-01-18 Tim Gopaul add command BusyFaultCount to report how many Busy interrupts were generated since last reboot 
   2023-01-11/12 Tim Gopaul  Removed getHexLineFromSerialPort.. use the main parsing code get command
   2023-01-11 Tim Gopaul added call to make commands case insensitive.
   2023-01-08 Tim Gopaul - add load command to read in Hex format string and place in RAM memory

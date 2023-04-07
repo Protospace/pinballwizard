@@ -1,6 +1,7 @@
 // Protospace is running code version PinBallMemoryPort20230201
 // The next version of code starts dated 2023 02 05
 // 
+// 2023-02-19 Tim Gopaul, gameSave and gameLoad added to access game Ram.. only to be used when Pinball machine is powered off
 // 2023-02-18 Tim Gopaul, trouble getting PCINT30 working. changed to interrup Pin = PIN_PD2 which gives digitalPinToInterrupt(interruptPin) as 0
 // 2023-02-14 Tim Gopaul, attach an interrupt low edge to pin 20 PD6 PCINT30
 //                        connect interrupt to _BusyRight to indicate the Pinball live memory was issued a wait.. which likey corrupted game ram
@@ -130,7 +131,7 @@ int helpText(){
   Serial.printf(">*   Compile Date: %s\n", __DATE__ );
   Serial.printf(">*   Compile Time: %s\n", __TIME__ );
   Serial.println(">*                                      *");
-  Serial.println(">*   Untility program to read RAM       *");
+  Serial.println(">*   Utility to read Pinball RAM        *");
   Serial.println(">*   Tim Gopaul for Protospace          *");
   Serial.println(">*                                      *");
   Serial.println(">*   Enter numbers as baseTen,or        *");
@@ -151,12 +152,17 @@ int helpText(){
   Serial.println(">*   game commands work directly        *");
   Serial.println(">*   Game RAM.                          *");
   Serial.println(">*   Use only when pinball off          *");
-  Serial.println(">*                                      *"); 
+  Serial.println(">*                                      *");
+  
+  Serial.println(">*   Use game commands for direct access*");
+  Serial.println(">*    to the live game Ram when Pinball *");
+  Serial.println(">*    is powered off.                   *");  
   Serial.println(">*   gameRead address                   *");
   Serial.println(">*   gameWrite address databyte         *");
   Serial.println(">*   gameDump start count               *");
-  Serial.println(">*                                      *"); 
-  
+  Serial.println(">*   gameSave startAddress count        *");
+  Serial.println(">*   gameLoad Intelhex record line      *");
+  Serial.println(">*                                      *");  
   Serial.println(">*                                      *");
   Serial.println(">*   Enter numbers as decimal or        *");
   Serial.println(">*   0xNN  0X55 for HEX                 *");
@@ -746,13 +752,13 @@ void testMemory(unsigned int addrStart, unsigned int addrCount, int testLoops) {
 void BusyFaultWarning(){
   BusyStateIRQ = LOW;
   ++BusyFaultCount;
-  BusyFaultAddress = (((PORTC & B0000111) << 8 ) + PORTA);
+  BusyFaultAddress = (((PORTC & B0000111) << 8 ) | PORTA);
   }
 
 void ShadowFaultWarning(){
   ShadowStateIRQ = LOW;
   ++ShadowFaultCount;
-  ShadowFaultAddress = (((PORTC & B0000111) << 8 ) + PORTA);
+  ShadowFaultAddress = (((PORTC & B0000111) << 8 ) | PORTA);
   }
 
 // ***** setup ***** -----------------------------------------------
