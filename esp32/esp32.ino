@@ -10,7 +10,7 @@
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 #include <WebServer.h>
-#include <LiquidCrystal_I2C.h>  // "LiquidCrystal I2C" by Marco Schwartz v1.1.2
+#include <LiquidCrystal_I2C.h>  // "LiquidCrystal I2C" by Frank de Brabander Marco Schwartz v1.1.2
 #include <ArduinoJson.h>        // v6.19.4
 #include <ElegantOTA.h>         // v2.2.9
 //#include <WebSerial.h>          // v1.3.0
@@ -23,8 +23,8 @@ String portalAPI = "https://api.my.protospace.ca";
 
 #define RX1_PIN 9
 #define TX1_PIN 10
-//HardwareSerial *gameSerial = &Serial;   	// for development
-HardwareSerial *gameSerial = &Serial1;  	// for ATmega
+HardwareSerial *gameSerial = &Serial;   	// for development
+//HardwareSerial *gameSerial = &Serial1;  	// for ATmega
 
 #define GAME_DATA_DELAY_MS 250
 #define CONTROLLER_DELAY_MS 1000
