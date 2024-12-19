@@ -1,7 +1,9 @@
 // Protospace Pinball Wizard
 // Sends high scores to the portal
 //
-// Board: ESP32 Wrover Module
+// Arduino 2.3.3 IDE
+// Board definition: DOIT ESP32 DEVKIT V1
+// 2024-11-06 Tim Gopaul update for 20x4 LCD on i2C
 
 #include <Arduino.h>
 #include <HardwareSerial.h>
@@ -10,7 +12,7 @@
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 #include <WebServer.h>
-#include <LiquidCrystal_I2C.h>  // "LiquidCrystal I2C" by Frank de Brabander Marco Schwartz v1.1.2
+#include <LiquidCrystal_I2C.h>  // "LiquidCrystal I2C" by Marco Schwartz v1.1.2
 #include <ArduinoJson.h>        // v6.19.4
 #include <ElegantOTA.h>         // v2.2.9
 //#include <WebSerial.h>          // v1.3.0
@@ -21,10 +23,19 @@
 String portalAPI = "https://api.my.protospace.ca";
 //String portalAPI = "https://api.spaceport.dns.t0.vc";
 
-#define RX1_PIN 9
-#define TX1_PIN 10
-HardwareSerial *gameSerial = &Serial;   	// for development
-//HardwareSerial *gameSerial = &Serial1;  	// for ATmega
+
+// Board definition: DOIT ESP32 DEVKIT V1
+// Serial is Serial0 and is the USB serial io
+// Serial1 is the communication to the Atmega2560 Mega serial port for reading RAM
+// Serial2 is the RFID scan for the tag reader
+
+#define RX2_PIN 32  //rfid tag reader
+#define TX2_PIN 33
+#define RX1_PIN 25  //Connect to Atmega monitor program to request game memory
+#define TX1_PIN 26  //Connect to Atmega monitor program to request game memory
+
+//HardwareSerial *gameSerial = &Serial;   	// for development use Serial 0 tied to USB gateway chip
+HardwareSerial* gameSerial = &Serial1;      // For game user communicate over Serial1 to Atmega2560 RX2 D17 / TX2 D16
 
 #define GAME_DATA_DELAY_MS 250
 #define CONTROLLER_DELAY_MS 1000
@@ -69,7 +80,7 @@ WebServer server(80);
 //	WebSerial.println(d);
 //}
 
-LiquidCrystal_I2C lcd(0x27, 16, 2);
+LiquidCrystal_I2C lcd(0x27, 20, 4);
 
 void rebootArduino() {
 	lcd.clear();
@@ -145,8 +156,9 @@ void processControllerState() {
 				Serial.print("[WIFI] Connected. IP address: ");
 				Serial.println(WiFi.localIP());
 
-				lcd.setCursor(0,1);
+				lcd.setCursor(0, 1);
 				lcd.print(WiFi.localIP());
+				lcd.setCursor(0, 2);
 
 				Serial.println("[TIME] Setting time using NTP.");
 				configTime(8 * 3600, 0, "pool.ntp.org", "time.nist.gov");
@@ -160,8 +172,12 @@ void processControllerState() {
 
 				lcd.clear();
 				lcd.print("CONNECT FAILED");
-				lcd.setCursor(0,1);
+				lcd.setCursor(0, 1);
 				lcd.print("WAIT 5 MINS...");
+				lcd.setCursor(0, 2);
+				lcd.print("I'm line 3...");
+				lcd.setCursor(0, 3);
+				lcd.print("I'm line 4....");
 				delay(300 * 1000);
 
 				rebootArduino();
@@ -607,18 +623,17 @@ void parseGameData(String data) {
 	}
 }
 
-void setup()
-{
+void setup() {
 	Serial.begin(115200);
 	Serial.setTimeout(50);
 
 	if (*gameSerial == Serial1) {
 		Serial.println("Game serial configured as Serial1 (ATmega).");
-		gameSerial->begin(115200, SERIAL_8N1);   //, RX1_PIN, TX1_PIN);
+		gameSerial->begin(115200, SERIAL_8N1, RX1_PIN, TX1_PIN);
 		gameSerial->setTimeout(50);
 	}
 
-	Serial2.begin(9600);
+	Serial2.begin(9600, SERIAL_8N1, RX2_PIN, TX2_PIN);
 	Serial2.setTimeout(50);
 
 	Serial.println("Host boot up");
