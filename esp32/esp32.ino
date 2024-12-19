@@ -44,22 +44,22 @@ HardwareSerial* gameSerial = &Serial1;      // For game user communicate over Se
 #define ELLIPSIS_ANIMATION_DELAY_MS 1000
 #define HEARTBEAT_INTERVAL_MS 1000 * 60 * 60  // hourly
 
-#define NUM_MAX_PLAYERS      4
+#define NUM_MAX_PLAYERS 4
 
-#define GAME_STATE_UNKNOWN   -1
-#define GAME_STATE_IN_GAME   0
-#define GAME_STATE_IDLE      1
-#define GAME_STATE_SETTINGS  2
-static const char* gameStateLabels[] = {"IN GAME", "IDLE", "SETTINGS"};
+#define GAME_STATE_UNKNOWN -1
+#define GAME_STATE_IN_GAME 0
+#define GAME_STATE_IDLE 1
+#define GAME_STATE_SETTINGS 2
+static const char* gameStateLabels[] = { "IN GAME", "IDLE", "SETTINGS" };
 int gameState = GAME_STATE_UNKNOWN;
 
-#define PLAYER_UNKNOWN   -1
-#define PLAYER1           0
-#define PLAYER2           1
-#define PLAYER3           2
-#define PLAYER4           3
-static const char* playerNumberLabels[] = {"PLAYER1", "PLAYER2", "PLAYER3", "PLAYER4"};
-static const char* playerNumberLabelsShort[] = {"P1", "P2", "P3", "P4"};
+#define PLAYER_UNKNOWN -1
+#define PLAYER1 0
+#define PLAYER2 1
+#define PLAYER3 2
+#define PLAYER4 3
+static const char* playerNumberLabels[] = { "PLAYER1", "PLAYER2", "PLAYER3", "PLAYER4" };
+static const char* playerNumberLabelsShort[] = { "P1", "P2", "P3", "P4" };
 int playerNumber = PLAYER_UNKNOWN;
 
 int totalScore = 0;
@@ -145,7 +145,7 @@ void processControllerState() {
 			break;
 
 		case CONTROLLER_WIFI_CONNECT:
-			lcd.setCursor(0,0);
+			lcd.setCursor(0, 0);
 			lcd.print("CONNECTING");
 			for (i = 0; i < (millis() / ELLIPSIS_ANIMATION_DELAY_MS) % 4; i++) {
 				lcd.print(".");
@@ -188,7 +188,7 @@ void processControllerState() {
 		case CONTROLLER_GET_TIME:
 			// time is needed to generate game ID
 
-			lcd.setCursor(0,0);
+			lcd.setCursor(0, 0);
 			lcd.print("GETTING TIME");
 			for (i = 0; i < (millis() / ELLIPSIS_ANIMATION_DELAY_MS) % 4; i++) {
 				lcd.print(".");
@@ -239,7 +239,7 @@ void processControllerState() {
 			}
 
 			Serial.println("[WIFI] Heartbeat success.");
-			lcd.setCursor(0,1);
+			lcd.setCursor(0, 1);
 			lcd.print("GOOD");
 
 			controllerState = CONTROLLER_RESET;
@@ -276,7 +276,7 @@ void processControllerState() {
 
 			lcd.clear();
 			lcd.print("WAITING FOR    ");
-			lcd.setCursor(0,1);
+			lcd.setCursor(0, 1);
 			lcd.print("GAME");
 
 			timer = millis();
@@ -321,7 +321,7 @@ void processControllerState() {
 			previousTotalScore = totalScore;
 
 			if (playerNumber >= 0) {
-				lcd.setCursor(0,0);
+				lcd.setCursor(0, 0);
 
 				bool nameIsSet = playerNames[playerNumber].length() > 0;
 				if (nameIsSet) {
@@ -339,7 +339,7 @@ void processControllerState() {
 					}
 				}
 
-				lcd.setCursor(0,1);
+				lcd.setCursor(0, 1);
 				lcd.print("SCORE: ");
 				lcd.print(playerScores[playerNumber]);
 				lcd.print("                 ");
@@ -432,7 +432,7 @@ void processControllerState() {
 					+ "&game_id="
 					+ gameId
 					+ "&player="
-					+ String(i+1)
+					+ String(i + 1)
 					+ "&score="
 					+ String(playerScores[i]);
 
@@ -456,7 +456,6 @@ void processControllerState() {
 					failed = true;
 					break;
 				}
-
 			}
 
 			if (!failed) {
@@ -469,7 +468,7 @@ void processControllerState() {
 			if (retryCount >= 5) {
 				lcd.clear();
 				lcd.print("SEND FAILED");
-				lcd.setCursor(0,1);
+				lcd.setCursor(0, 1);
 				lcd.print("RESETTING...");
 				nextControllerState = CONTROLLER_HEARTBEAT;
 				controllerState = CONTROLLER_DELAY;
@@ -667,18 +666,15 @@ void setup() {
 	delay(500);
 }
 
-void loop()
-{
-	if (Serial.available() > 0)
-	{
+void loop() {
+	if (Serial.available() > 0) {
 		String data = Serial.readString();
 		data.trim();
 
 		gameSerial->println(data);
 	}
 
-	if (gameSerial->available() > 0)
-	{
+	if (gameSerial->available() > 0) {
 		String data = gameSerial->readString();
 		data.trim();
 		Serial.print("Game serial data: ");
@@ -689,8 +685,7 @@ void loop()
 		}
 	}
 
-	if (Serial2.available() > 0)
-	{
+	if (Serial2.available() > 0) {
 		String data = Serial2.readString();
 
 		Serial.print("RFID scan: ");
@@ -715,7 +710,6 @@ void loop()
 				controllerState = CONTROLLER_GET_NAME;
 			}
 		}
-
 	}
 
 	processControllerState();
