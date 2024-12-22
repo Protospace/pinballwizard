@@ -578,7 +578,7 @@ void parseGameData(String data) {
 			+ data.substring(25, 27);
 		score = scoreStr.toInt();
 
-		if (score > playerScores[PLAYER1]) {
+		if (score != 0) {  // prevent button reset nuking scores before send
 			playerScores[PLAYER1] = score;
 		}
 		tmpTotalScore += score;
@@ -589,7 +589,7 @@ void parseGameData(String data) {
 			+ data.substring(45, 47);
 		score = scoreStr.toInt();
 
-		if (score > playerScores[PLAYER2]) {
+		if (score != 0) {
 			playerScores[PLAYER2] = score;
 		}
 		tmpTotalScore += score;
@@ -600,7 +600,7 @@ void parseGameData(String data) {
 			+ data.substring(65, 67);
 		score = scoreStr.toInt();
 
-		if (score > playerScores[PLAYER3]) {
+		if (score != 0) {
 			playerScores[PLAYER3] = score;
 		}
 		tmpTotalScore += score;
@@ -611,7 +611,7 @@ void parseGameData(String data) {
 			+ data.substring(85, 87);
 		score = scoreStr.toInt();
 
-		if (score > playerScores[PLAYER4]) {
+		if (score != 0) {
 			playerScores[PLAYER4] = score;
 		}
 		tmpTotalScore += score;
