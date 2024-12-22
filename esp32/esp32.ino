@@ -530,7 +530,7 @@ void processDataState() {
 
 		case DATA_PLAYER_SCORES:
 			Serial.println("Getting player scores...");
-			gameSerial->println("dump 256 16");
+			gameSerial->println("dump 0x0200 16");
 			nextDataState = DATA_GAME_INFO;
 			dataState = DATA_DELAY;
 			break;
@@ -571,7 +571,7 @@ void parseGameData(String data) {
 			Serial.print("Set player number: ");
 			Serial.println(playerNumberLabels[playerNumber]);
 		}
-	} else if (gameState == GAME_STATE_IN_GAME && data.startsWith("0x0100:")) {  // player scores
+	} else if (gameState == GAME_STATE_IN_GAME && data.startsWith("0x0200:")) {  // player scores
 		scoreStr = data.substring(10, 12)
 			+ data.substring(15, 17)
 			+ data.substring(20, 22)
