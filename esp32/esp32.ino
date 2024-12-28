@@ -67,6 +67,7 @@ int playerScores[NUM_MAX_PLAYERS];
 String scannedCard = "";
 String playerCards[NUM_MAX_PLAYERS];
 String playerNames[NUM_MAX_PLAYERS];
+String playerDrinks[NUM_MAX_PLAYERS];
 
 WiFiClientSecure wc;
 WebServer server(80);
@@ -272,6 +273,11 @@ void processControllerState() {
 			playerNames[2] = "";
 			playerNames[3] = "";
 
+			playerDrinks[0] = "";
+			playerDrinks[1] = "";
+			playerDrinks[2] = "";
+			playerDrinks[3] = "";
+
 			Serial.println("[GAME] Cleared game data.");
 
 			lcd.clear();
@@ -318,6 +324,7 @@ void processControllerState() {
 				controllerState = CONTROLLER_DELAY;
 				break;
 			}
+
 			previousTotalScore = totalScore;
 
 			if (playerNumber >= 0) {
@@ -328,21 +335,68 @@ void processControllerState() {
 					lcd.print(playerNumberLabelsShort[playerNumber]);
 					lcd.print(" ");
 					lcd.print(playerNames[playerNumber]);
-					lcd.print("             ");
+
+					for (int i = 3 + playerNames[playerNumber].length(); i < 20; i++) {
+						lcd.print(" ");
+					}
+
+					lcd.setCursor(0, 1);
+					lcd.print("SCORE: ");
+					lcd.print(playerScores[playerNumber]);
+					lcd.print("     ");  // safe length up to 10M
+
+					if (playerScores[playerNumber] >= 1000000) {
+						lcd.setCursor(0, 2);
+						lcd.print("Wow, you deserve a");
+						lcd.setCursor(0, 3);
+						lcd.print("cold ");
+						lcd.print(playerDrinks[playerNumber]);
+						lcd.print("!");
+
+						for (int i = 6 + playerDrinks[playerNumber].length(); i < 20; i++) {
+							lcd.print(" ");
+						}
+					} else if (playerScores[playerNumber] >= 100000) {
+						lcd.setCursor(0, 2);
+						lcd.print("Play better with a");
+						lcd.setCursor(0, 3);
+						lcd.print("cold ");
+						lcd.print(playerDrinks[playerNumber]);
+						lcd.print("!");
+
+						for (int i = 6 + playerDrinks[playerNumber].length(); i < 20; i++) {
+							lcd.print(" ");
+						}
+					} else {
+						lcd.setCursor(0, 2);
+						lcd.print("How about a cold  ");
+						lcd.setCursor(0, 3);
+						lcd.print(playerDrinks[playerNumber]);
+						lcd.print("?");
+
+						for (int i = 1 + playerDrinks[playerNumber].length(); i < 20; i++) {
+							lcd.print(" ");
+						}
+					}
 				} else {
 					lcd.print(playerNumberLabels[playerNumber]);
 
 					if (playerScores[playerNumber] <= 10000) {
-						lcd.print(" SCAN NOW");
+						lcd.print(" SCAN NOW         ");
 					} else {
-						lcd.print("         ");
+						lcd.print("                  ");
 					}
-				}
 
-				lcd.setCursor(0, 1);
-				lcd.print("SCORE: ");
-				lcd.print(playerScores[playerNumber]);
-				lcd.print("                 ");
+					lcd.setCursor(0, 1);
+					lcd.print("SCORE: ");
+					lcd.print(playerScores[playerNumber]);
+					lcd.print("     ");  // safe length up to 10M
+
+					lcd.setCursor(0, 2);
+					lcd.print("                    ");
+					lcd.setCursor(0, 3);
+					lcd.print("                    ");
+				}
 			}
 
 			break;
@@ -385,6 +439,7 @@ void processControllerState() {
 			deserializeJson(jsonDoc, response);
 
 			playerNames[playerNumber] = jsonDoc["name"].as<String>();
+			playerDrinks[playerNumber] = jsonDoc["drink"].as<String>();
 			playerCards[playerNumber] = scannedCard;
 
 			controllerState = CONTROLLER_IN_GAME;
