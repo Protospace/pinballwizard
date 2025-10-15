@@ -12,7 +12,7 @@
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 #include <WebServer.h>
-#include <LiquidCrystal_I2C.h>  // "LiquidCrystal I2C" by Marco Schwartz v1.1.2
+#include <LiquidCrystal_I2C.h>  // "LiquidCrystal I2C" by Frank de Brabander (Marco Schwartz) v1.1.2
 #include <ArduinoJson.h>        // v6.19.4
 #include <ElegantOTA.h>         // v2.2.9
 //#include <WebSerial.h>          // v1.3.0
@@ -24,7 +24,6 @@ String portalAPI = "https://api.my.protospace.ca";
 //String portalAPI = "https://api.spaceport.dns.t0.vc";
 
 
-// Board definition: DOIT ESP32 DEVKIT V1
 // Serial is Serial0 and is the USB serial io
 // Serial1 is the communication to the Atmega2560 Mega serial port for reading RAM
 // Serial2 is the RFID scan for the tag reader
